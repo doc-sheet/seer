@@ -162,8 +162,12 @@ class TestAnomalyDetection(unittest.TestCase):
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.query")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.save_timepoint")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.reset_cleanup_predict_task")
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.can_queue_cleanup_predict_task")
+    @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.queue_data_purge_flag")
     def test_detect_anomalies_online(
         self,
+        mock_queue_data_purge_flag,
+        mock_can_queue_cleanup_predict_task,
         mock_reset_cleanup_predict,
         mock_save_timepoint,
         mock_query,
@@ -232,6 +236,7 @@ class TestAnomalyDetection(unittest.TestCase):
         # Dummy return so we don't hit db
         mock_save_timepoint.return_value = ""
         mock_reset_cleanup_predict.return_value = ""
+        mock_can_queue_cleanup_predict_task.return_value = False
 
         new_timestamp = len(ts_values) + datetime.now().timestamp() + 1
         context = AlertInSeer(id=0, cur_window=TimeSeriesPoint(timestamp=new_timestamp, value=0.5))
@@ -286,8 +291,10 @@ class TestAnomalyDetection(unittest.TestCase):
             last_queued_at=None,
         )
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception) as e:
             AnomalyDetection().detect_anomalies(request=request)
+        assert "Not enough timeseries data" in str(e.exception)
+        assert mock_save_timepoint.call_count == 2
 
         # Alert is None
         mock_query.return_value = None
@@ -347,6 +354,59 @@ class TestAnomalyDetection(unittest.TestCase):
         with self.assertRaises(ServerError) as e:
             AnomalyDetection().detect_anomalies(request=request)
         assert "Invalid state" in str(e.exception)
+
+        # Alert has less data than min requirement and data pruning should be triggered
+        mock_can_queue_cleanup_predict_task.return_value = True
+        cleanup_predict_config = CleanupPredictConfig(
+            num_old_points=10,
+            timestamp_threshold=0,
+            num_acceptable_points=5,
+            num_predictions_remaining=0,
+            num_acceptable_predictions=0,
+        )
+
+        mock_query.return_value = DynamicAlert(
+            organization_id=0,
+            project_id=0,
+            external_alert_id=0,
+            config=config,
+            timeseries=MPTimeSeries(
+                timestamps=ts_timestamps[:10],
+                values=ts_values,
+            ),
+            anomalies=MPTimeSeriesAnomalies(
+                flags=np.array(["anomaly_higher_confidence"] * len(ts_timestamps[:10])),
+                scores=np.array([0.4] * len(ts_timestamps[:10])),
+                matrix_profile_suss=dummy_mp_suss,
+                matrix_profile_fixed=dummy_mp_fixed,
+                window_size=window_size,
+                thresholds=[],
+                original_flags=np.array(["none"] * len(ts_timestamps[:10])),
+                use_suss=np.array([True] * len(ts_timestamps[:10])),
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                ]
+                * len(ts_timestamps[:10]),
+            ),
+            prophet_predictions=ProphetPrediction(
+                timestamps=np.array([]),
+                y=np.array([]),
+                yhat=np.array([]),
+                yhat_lower=np.array([]),
+                yhat_upper=np.array([]),
+            ),
+            cleanup_predict_config=cleanup_predict_config,
+            only_suss=False,
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+            last_queued_at=None,
+        )
+
+        with self.assertRaises(ClientError) as e:
+            AnomalyDetection().detect_anomalies(request=request)
+        assert "Not enough timeseries data" in str(e.exception)
+        assert mock_save_timepoint.call_count == 3
+        assert mock_queue_data_purge_flag.call_count == 1
+        assert mock_can_queue_cleanup_predict_task.call_count == 3
 
     @patch("seer.anomaly_detection.detectors.MPStreamAnomalyDetector.detect")
     @patch("seer.anomaly_detection.accessors.DbAlertDataAccessor.query")
