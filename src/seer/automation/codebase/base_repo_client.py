@@ -536,9 +536,7 @@ class BaseRepoClient(ABC):
                 if key == "__status__":
                     continue
 
-                is_last_item = i == len(items) - 1 or (
-                    i == len(items) - 2 and "__status__" in node
-                )
+                is_last_item = i == len(items) - 1 or (i == len(items) - 2 and "__status__" in node)
 
                 if is_root:
                     current_prefix = ""
@@ -565,9 +563,7 @@ class BaseRepoClient(ABC):
                         )
                     ):
                         lines.append(f"{current_prefix}{key}/")
-                        _build_tree(
-                            value, previous_parts + [key], next_prefix, is_last_item, False
-                        )
+                        _build_tree(value, previous_parts + [key], next_prefix, is_last_item, False)
                     elif (
                         only_immediate_children_of_path is not None
                         and only_immediate_children_of_path == "/".join(previous_parts)
