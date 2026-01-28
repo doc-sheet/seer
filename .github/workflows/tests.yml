@@ -36,12 +36,18 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      - name: Compute requirements hash
+        id: req-hash
+        run: echo "hash=$(sha256sum requirements.txt | cut -c1-8)" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         run: |
           make .env
+          # Use requirements hash in cache key to invalidate when deps change
+          CACHE_KEY="ghcr.io/${{ github.repository_owner }}/seer:cache-${{ steps.req-hash.outputs.hash }}"
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json \
-            --set *.cache-to=type=registry,ref=ghcr.io/${{ github.repository_owner }}/seer:cache,mode=max \
-            --set *.cache-from=type=registry,ref=ghcr.io/${{ github.repository_owner }}/seer:cache \
+            --set *.cache-to=type=registry,ref=${CACHE_KEY},mode=max \
+            --set *.cache-from=type=registry,ref=${CACHE_KEY} \
             --set *.output=type=registry \
             --set *.tags=ghcr.io/${{ github.repository_owner }}/seer:cache-${{ github.sha }}
 
