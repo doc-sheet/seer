@@ -20,6 +20,7 @@ from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import (
+    BaseRepoClient,
     RepoClient,
     RepoClientType,
     autocorrect_repo_name,
@@ -116,7 +117,7 @@ class AutofixContext(PipelineContext):
         repo_name: str | None = None,
         repo_external_id: str | None = None,
         type: RepoClientType = RepoClientType.READ,
-    ) -> RepoClient:
+    ) -> BaseRepoClient:
         return get_repo_client(
             repos=self.repos, repo_name=repo_name, repo_external_id=repo_external_id, type=type
         )

@@ -67,6 +67,10 @@ class AppConfig(BaseModel):
     GITHUB_CODECOV_PR_REVIEW_APP_ID: str | None = None
     GITHUB_CODECOV_PR_REVIEW_PRIVATE_KEY: str | None = None
 
+    # GitLab Configuration
+    GITLAB_TOKEN: str | None = None
+    GITLAB_INSTANCE_URL: str = "https://gitlab.com"  # Override for self-hosted GitLab
+
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = ""
