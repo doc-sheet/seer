@@ -48,17 +48,18 @@ jobs:
             # --show-diff-on-failure will display what needs to be fixed without making changes
             xargs pre-commit run --show-diff-on-failure --files
 
+      # Auto-fix requires Sentry's internal GitHub App - skip for forks
       - name: Get auth token
         id: token
-        if: ${{ steps.pre-commit_results.outcome == 'failure' }}
+        if: ${{ steps.pre-commit_results.outcome == 'failure' && vars.SENTRY_INTERNAL_APP_ID != '' }}
+        continue-on-error: true
         uses: getsentry/action-github-app-token@d4b5da6c5e37703f8c3b3e43abb5705b46e159cc # v3.0.0
         with:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
       - name: Apply any pre-commit fixed files
-        if: ${{ steps.pre-commit_results.outcome == 'failure' }}
-        # note: this runs "always" or else it's skipped when pre-commit fails
+        if: ${{ steps.pre-commit_results.outcome == 'failure' && steps.token.outputs.token != '' }}
         uses: getsentry/action-github-commit@5972d5f578ad77306063449e718c0c2a6fbc4ae1 # v2.1.0
         with:
           github-token: ${{ steps.token.outputs.token }}
