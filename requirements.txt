@@ -359,7 +359,7 @@ kiwisolver==1.4.5
     #   matplotlib
 kombu==5.4.2
     # via celery
-langfuse @ git+https://github.com/jennmueng/langfuse-python.git@d7c0127682ddb20f73c5cf4fbb396cdfa8961fc3
+langfuse==3.12.1
     # via -r requirements-constraints.txt
 lazy-object-proxy==1.12.0
     # via openapi-spec-validator

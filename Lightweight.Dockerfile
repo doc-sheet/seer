@@ -21,6 +21,9 @@ RUN apt-get update && \
     git && \
     rm -rf /var/lib/apt/lists/*
 
+# Install uv for faster dependency management
+RUN pip install uv
+
 # Install td-grpc-bootstrap
 RUN curl -L https://storage.googleapis.com/traffic-director/td-grpc-bootstrap-0.16.0.tar.gz | tar -xz && \
     mv td-grpc-bootstrap-0.16.0/td-grpc-bootstrap /usr/local/td-grpc-bootstrap && \
@@ -28,12 +31,11 @@ RUN curl -L https://storage.googleapis.com/traffic-director/td-grpc-bootstrap-0.
 
 COPY pyproject.toml .
 
-# Install dependencies
+# Install dependencies with uv (faster than pip)
 COPY setup.py requirements.txt ./
-RUN pip install --upgrade pip==24.0
 # pytorch without gpu
-RUN pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
-RUN pip install -r requirements.txt --no-cache-dir
+RUN uv pip install --system torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
+RUN uv pip install --system -r requirements.txt
 
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/
@@ -51,7 +53,7 @@ COPY supervisord.conf /etc/supervisord.conf
 
 # Ignore dependencies, as they are already installed and docker handles the caching
 # this skips annoying rebuilds where requirements would technically be met anyways.
-RUN pip install --default-timeout=120 -e . --no-cache-dir --no-deps
+RUN uv pip install --system -e . --no-deps
 
 ENV FLASK_APP=src.seer.app:start_app()
 
