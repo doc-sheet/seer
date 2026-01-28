@@ -1,0 +1,132 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit Configuration for Seer - Sentry's AI/ML Service
+# Documentation: https://docs.coderabbit.ai/guides/configure-coderabbit
+
+language: en-US
+
+early_access: true
+
+reviews:
+  # Enable high-quality reviews
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+
+  # Review profile - assertive for thorough code review
+  profile: assertive
+
+  # Request changes when issues found
+  request_changes_workflow: true
+
+  # Collapse walkthrough for cleaner PR comments
+  collapse_walkthrough: true
+
+  # Enable poem in reviews (fun touch)
+  poem: false
+
+  # Review status - show in PR
+  review_status: true
+
+  # Auto-review settings
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false  # Don't review draft PRs
+    base_branches:
+      - main
+      - master
+
+  # Path-based review instructions
+  path_instructions:
+    - path: "src/seer/automation/**/*.py"
+      instructions: |
+        Focus on:
+        - LLM prompt injection vulnerabilities
+        - Proper error handling for external API calls (GitHub, GitLab, OpenAI, Anthropic)
+        - Resource cleanup (temp directories, file handles)
+        - Timeout handling for long-running operations
+        - Type safety with abstract base classes
+
+    - path: "src/seer/automation/codebase/**/*.py"
+      instructions: |
+        This is the repository client layer. Pay attention to:
+        - Consistent return types between GitHub and GitLab implementations
+        - Proper authentication token handling (never log tokens)
+        - Rate limiting considerations
+        - Branch/commit SHA validation
+
+    - path: "src/seer/automation/agent/**/*.py"
+      instructions: |
+        This is the LLM client layer. Check for:
+        - Multi-provider compatibility (Anthropic, OpenAI, Google)
+        - Proper streaming/timeout handling
+        - Token counting and context limits
+        - Fallback logic between regions/models
+
+    - path: "tests/**/*.py"
+      instructions: |
+        Ensure tests:
+        - Use real database connections, not mocks (per project guidelines)
+        - Don't test logging or mock behavior
+        - Use dependency injection for isolation
+        - Have meaningful assertions
+
+    - path: "**/*migration*.py"
+      instructions: |
+        Database migrations require extra scrutiny:
+        - Check for data loss risks
+        - Verify rollback capability
+        - Consider performance on large tables
+
+    - path: "src/seer/configuration.py"
+      instructions: |
+        Configuration changes:
+        - Ensure no secrets have default values
+        - Check for proper type annotations
+        - Verify environment variable naming consistency
+
+  # Tools configuration
+  tools:
+    # Enable AST-based analysis
+    ast-grep:
+      enabled: true
+
+    # Python-specific tools
+    ruff:
+      enabled: true
+
+    # Security scanning
+    semgrep:
+      enabled: true
+
+    # Shell script checking
+    shellcheck:
+      enabled: true
+
+    # GitHub Actions validation
+    actionlint:
+      enabled: true
+
+    # Markdown linting
+    markdownlint:
+      enabled: true
+
+    # YAML validation
+    yamllint:
+      enabled: true
+
+    # Biome for any JS/TS
+    biome:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+# Knowledge base for better context
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
