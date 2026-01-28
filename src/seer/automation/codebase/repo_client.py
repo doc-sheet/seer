@@ -22,10 +22,8 @@ from github import (
     UnknownObjectException,
 )
 from github.GithubRetry import GithubRetry
-from github.GitRef import GitRef
 from github.GitTree import GitTree
 from github.GitTreeElement import GitTreeElement
-from github.PullRequest import PullRequest
 from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name

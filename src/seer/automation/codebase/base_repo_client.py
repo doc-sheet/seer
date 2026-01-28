@@ -13,17 +13,13 @@ import tarfile
 import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import timedelta
 from enum import Enum
 from typing import Any
 
 import requests
-import sentry_sdk
 
-from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.utils import get_all_supported_extensions
 from seer.automation.models import FileChange, FilePatch, RepoDefinition
-from seer.automation.utils import AgentError
 
 logger = logging.getLogger(__name__)
 

@@ -9,12 +9,11 @@ import functools
 import logging
 import os
 import tempfile
-from typing import Any, Literal
+from typing import Any
 
 import gitlab
-import requests
 import sentry_sdk
-from gitlab.v4.objects import Project, ProjectMergeRequest
+from gitlab.v4.objects import Project
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.base_repo_client import (
@@ -231,9 +230,7 @@ class GitLabRepoClient(BaseRepoClient):
         Returns:
             Tuple of (file_content, encoding). Content is None if file doesn't exist.
         """
-        logger.debug(
-            f"Getting file contents for {path} in {self.repo_full_name} on sha {sha}"
-        )
+        logger.debug(f"Getting file contents for {path} in {self.repo_full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
 
@@ -281,9 +278,8 @@ class GitLabRepoClient(BaseRepoClient):
             tree = self.project.repository_tree(ref=commit_sha, recursive=True, get_all=True)
 
             for item in tree:
-                if (
-                    item["type"] == "blob"
-                    and any(item["path"].endswith(ext) for ext in valid_file_extensions)
+                if item["type"] == "blob" and any(
+                    item["path"].endswith(ext) for ext in valid_file_extensions
                 ):
                     # GitLab doesn't return file size in repository_tree
                     # We'll include all files and filter by size when reading
@@ -482,7 +478,7 @@ class GitLabRepoClient(BaseRepoClient):
                     except gitlab.exceptions.GitlabDeleteError:
                         pass
                     sentry_sdk.capture_message(
-                        f"Failed to create branch from changes - no changes detected"
+                        "Failed to create branch from changes - no changes detected"
                     )
                     return None
             except gitlab.exceptions.GitlabGetError:

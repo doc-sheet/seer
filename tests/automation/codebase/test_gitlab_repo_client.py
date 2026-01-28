@@ -99,7 +99,10 @@ class TestGitLabRepoClient:
                 GitLabRepoClient(
                     None,
                     RepoDefinition(
-                        provider="gitlab", owner="test-group", name="test-project", external_id="123"
+                        provider="gitlab",
+                        owner="test-group",
+                        name="test-project",
+                        external_id="123",
                     ),
                 )
 
@@ -426,8 +429,16 @@ class TestGitLabRepoClient:
         mock_mr = MagicMock()
         mock_mr.changes.return_value = {
             "changes": [
-                {"old_path": "file1.py", "new_path": "file1.py", "diff": "@@ -1,5 +1,7 @@\n+new line"},
-                {"old_path": "file2.py", "new_path": "file2.py", "diff": "@@ -10,3 +10,5 @@\n+another"},
+                {
+                    "old_path": "file1.py",
+                    "new_path": "file1.py",
+                    "diff": "@@ -1,5 +1,7 @@\n+new line",
+                },
+                {
+                    "old_path": "file2.py",
+                    "new_path": "file2.py",
+                    "diff": "@@ -10,3 +10,5 @@\n+another",
+                },
             ]
         }
         mock_gitlab.projects.get.return_value.mergerequests.get.return_value = mock_mr
@@ -452,7 +463,9 @@ class TestGitLabRepoClient:
         assert result == "head_sha_123"
 
     def test_autocorrect_path_exact_match(self, gitlab_client):
-        gitlab_client.get_valid_file_paths = MagicMock(return_value={"src/main.py", "tests/test.py"})
+        gitlab_client.get_valid_file_paths = MagicMock(
+            return_value={"src/main.py", "tests/test.py"}
+        )
 
         path, was_corrected = gitlab_client._autocorrect_path("src/main.py")
 
@@ -460,7 +473,9 @@ class TestGitLabRepoClient:
         assert was_corrected is False
 
     def test_autocorrect_path_partial_match(self, gitlab_client):
-        gitlab_client.get_valid_file_paths = MagicMock(return_value={"src/main.py", "tests/test.py"})
+        gitlab_client.get_valid_file_paths = MagicMock(
+            return_value={"src/main.py", "tests/test.py"}
+        )
 
         path, was_corrected = gitlab_client._autocorrect_path("main.py")
 
@@ -468,7 +483,9 @@ class TestGitLabRepoClient:
         assert was_corrected is True
 
     def test_autocorrect_path_no_match(self, gitlab_client):
-        gitlab_client.get_valid_file_paths = MagicMock(return_value={"src/main.py", "tests/test.py"})
+        gitlab_client.get_valid_file_paths = MagicMock(
+            return_value={"src/main.py", "tests/test.py"}
+        )
 
         path, was_corrected = gitlab_client._autocorrect_path("nonexistent.py")
 
@@ -561,7 +578,9 @@ class TestGitLabRepoClient:
         assert "content" not in result
 
     def test_does_file_exist(self, gitlab_client):
-        gitlab_client.get_valid_file_paths = MagicMock(return_value={"src/main.py", "tests/test.py"})
+        gitlab_client.get_valid_file_paths = MagicMock(
+            return_value={"src/main.py", "tests/test.py"}
+        )
 
         assert gitlab_client.does_file_exist("src/main.py") is True
         assert gitlab_client.does_file_exist("/src/main.py") is True
