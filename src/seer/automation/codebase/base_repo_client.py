@@ -484,6 +484,99 @@ class BaseRepoClient(ABC):
 
         return tmp_dir, tmp_repo_dir
 
+    def _build_file_tree_string(
+        self, files: list[dict], only_immediate_children_of_path: str | None = None
+    ) -> str:
+        """
+        Build a tree representation of files to save tokens when many files share directories.
+
+        Args:
+            files: List of dictionaries with 'path' and 'status' keys.
+            only_immediate_children_of_path: If provided, only include immediate children of this path.
+
+        Returns:
+            A string representation of the file tree.
+        """
+        if not files:
+            return "No files changed"
+
+        if only_immediate_children_of_path is not None:
+            only_immediate_children_of_path = only_immediate_children_of_path.rstrip("/")
+
+        # Build a nested dictionary structure representing the file tree
+        tree: dict = {}
+        for file in files:
+            path = file["path"]
+            status = file["status"]
+
+            parts = path.split("/")
+            current = tree
+            for i, part in enumerate(parts):
+                if i == len(parts) - 1:
+                    current[part] = {"__status__": status}
+                else:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+
+        lines: list[str] = []
+
+        def _build_tree(
+            node: dict,
+            previous_parts: list[str] | None = None,
+            prefix: str = "",
+            is_last: bool = True,
+            is_root: bool = True,
+        ) -> None:
+            if previous_parts is None:
+                previous_parts = []
+            items = list(node.items())
+
+            for i, (key, value) in enumerate(sorted(items)):
+                if key == "__status__":
+                    continue
+
+                is_last_item = i == len(items) - 1 or (
+                    i == len(items) - 2 and "__status__" in node
+                )
+
+                if is_root:
+                    current_prefix = ""
+                    next_prefix = ""
+                else:
+                    current_prefix = prefix + ("└── " if is_last else "├── ")
+                    next_prefix = prefix + ("    " if is_last else "│   ")
+
+                if "__status__" in value:
+                    if (
+                        only_immediate_children_of_path is not None
+                        and only_immediate_children_of_path != "/".join(previous_parts)
+                    ):
+                        continue
+
+                    status = value["__status__"]
+                    status_str = f" ({status})" if status else ""
+                    lines.append(f"{current_prefix}{key}{status_str}")
+                else:
+                    if (
+                        only_immediate_children_of_path is None
+                        or only_immediate_children_of_path.startswith(
+                            "/".join(previous_parts + [key])
+                        )
+                    ):
+                        lines.append(f"{current_prefix}{key}/")
+                        _build_tree(
+                            value, previous_parts + [key], next_prefix, is_last_item, False
+                        )
+                    elif (
+                        only_immediate_children_of_path is not None
+                        and only_immediate_children_of_path == "/".join(previous_parts)
+                    ):
+                        lines.append(f"{current_prefix}{key}/")
+
+        _build_tree(tree)
+        return "\n".join(lines)
+
     def _get_valid_file_paths_from_tree(
         self, tree_items: list[Any], path_attr: str = "path", type_attr: str = "type"
     ) -> set[str]:
