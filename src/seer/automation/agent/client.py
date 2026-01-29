@@ -33,7 +33,7 @@ from google.genai.types import (
 )
 from google.genai.types import Tool as GeminiTool
 from langfuse import observe
-from langfuse.openai import openai
+from langfuse.openai import openai  # type: ignore[attr-defined]
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
 from requests.exceptions import ChunkedEncodingError
 

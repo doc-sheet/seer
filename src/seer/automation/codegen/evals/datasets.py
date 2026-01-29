@@ -25,6 +25,7 @@ from langfuse.api.resources.commons.types.dataset_run_item import DatasetRunItem
 from langfuse.api.resources.commons.types.dataset_run_with_items import DatasetRunWithItems
 
 from seer.automation.codegen.evals.models import EvalItemInput, EvalItemOutput
+from seer.langfuse import fetch_trace, get_dataset_item
 from seer.automation.codegen.models import BugPrediction
 
 
@@ -46,7 +47,7 @@ def run_summary(dataset_name: str, run_name: str):
     """
     langfuse = Langfuse()
     try:
-        run = langfuse.get_dataset_run(dataset_name, run_name)
+        run = langfuse.get_dataset_run(dataset_name=dataset_name, run_name=run_name)
     except NotFoundError as e:
         click.echo(f"❌ Run {run_name} not found: {e}")
         return
@@ -177,7 +178,7 @@ def run_details(dataset_name: str, run_name: str, format: Literal["md"]):
     """
     langfuse = Langfuse()
     try:
-        run = langfuse.get_dataset_run(dataset_name, run_name)
+        run = langfuse.get_dataset_run(dataset_name=dataset_name, run_name=run_name)
     except NotFoundError as e:
         click.echo(f"❌ Run {run_name} not found: {e}")
         return
@@ -401,8 +402,8 @@ def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> Rele
     Returns:
         RelevantItemInfo: Structured information about the item
     """
-    trace = langfuse.fetch_trace(item.trace_id)
-    dataset_item = langfuse.get_dataset_item(item.dataset_item_id)
+    trace = fetch_trace(langfuse, item.trace_id)
+    dataset_item = get_dataset_item(langfuse, item.dataset_item_id)
 
     # Load the expected issues from the dataset item.
     if not dataset_item.expected_output:

@@ -2,7 +2,7 @@ from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from johen import generate
-from langfuse.client import DatasetItemClient
+from langfuse._client.client import DatasetItemClient  # type: ignore[attr-defined]
 
 from seer.automation.agent.models import (
     LlmGenerateTextResponse,

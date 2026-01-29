@@ -5,7 +5,7 @@ from typing import Literal, TypedDict
 from langfuse import observe
 
 # DatasetItemClient moved to private module in langfuse 3.x
-from langfuse._client.client import DatasetItemClient
+from langfuse._client.client import DatasetItemClient  # type: ignore[attr-defined]
 from pydantic import BaseModel
 from pydantic_xml import attr, element
 

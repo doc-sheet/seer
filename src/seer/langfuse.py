@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 from langfuse import Langfuse, get_client
+from langfuse._client.client import DatasetItemClient  # type: ignore[attr-defined]
 
 from seer.configuration import AppConfig
 from seer.dependency_injection import Module, inject, injected
@@ -9,6 +10,24 @@ from seer.dependency_injection import Module, inject, injected
 logger = logging.getLogger(__name__)
 
 langfuse_module = Module()
+
+
+# Compatibility functions for langfuse 3.x API changes
+def get_dataset_item(langfuse: Langfuse, item_id: str) -> DatasetItemClient:
+    """
+    Compatibility function for langfuse.get_dataset_item() which was removed in 3.x.
+    In langfuse 3.x, use the API client to fetch dataset items directly.
+    """
+    item = langfuse.api.dataset_items.get(item_id)
+    return DatasetItemClient(item, langfuse=langfuse)
+
+
+def fetch_trace(langfuse: Langfuse, trace_id: str) -> Any:
+    """
+    Compatibility function for langfuse.fetch_trace() which was removed in 3.x.
+    In langfuse 3.x, use the API client to fetch traces directly.
+    """
+    return langfuse.api.trace.get(trace_id)
 
 
 class LangfuseContext:
@@ -70,7 +89,7 @@ def provide_langfuse(config: AppConfig = injected) -> Langfuse:
         public_key=config.LANGFUSE_PUBLIC_KEY,
         secret_key=config.LANGFUSE_SECRET_KEY,
         host=config.LANGFUSE_HOST,
-        enabled=bool(config.LANGFUSE_HOST),
+        tracing_enabled=bool(config.LANGFUSE_HOST),
     )
 
 
@@ -83,7 +102,8 @@ def append_langfuse_trace_tags(new_tags: list[str], langfuse: Langfuse = injecte
     try:
         trace_id = langfuse_context.get_current_trace_id()
         if trace_id:
-            trace = langfuse.get_trace(trace_id)
+            # In langfuse 3.x, use api.trace.get() to fetch trace details
+            trace = langfuse.api.trace.get(trace_id)
             langfuse_context.update_current_trace(
                 tags=(trace.tags or []) + new_tags,
             )

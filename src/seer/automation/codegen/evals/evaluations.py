@@ -3,7 +3,7 @@ import logging
 from langfuse import observe
 
 # DatasetItemClient moved to private module in langfuse 3.x
-from langfuse._client.client import DatasetItemClient
+from langfuse._client.client import DatasetItemClient  # type: ignore[attr-defined]
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.codegen.bug_prediction_step import BugPredictionStep

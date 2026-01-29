@@ -6,6 +6,7 @@ from langfuse.api.resources.commons.errors import NotFoundError
 from langfuse.api.resources.commons.types.dataset_status import DatasetStatus
 
 from celery_app.app import celery_app
+from seer.langfuse import get_dataset_item
 from seer.automation.autofix.evaluations import make_score_name
 from seer.automation.codegen.evals.evaluations import (
     evaluate_bug_predictions,
@@ -92,7 +93,7 @@ def run_relevant_warnings_evaluation_on_item(
 
     # This can fail with LangfuseNotFoundError if the item is not found or if it's not active.
     try:
-        dataset_item = langfuse.get_dataset_item(item_id)
+        dataset_item = get_dataset_item(langfuse, item_id)
     except NotFoundError:
         logger.error(f"Item {item_id} not found or not active. Skipping scoring.")
         return
@@ -113,14 +114,14 @@ def run_relevant_warnings_evaluation_on_item(
         dataset_item_trace_id = trace_id
         try:
             bug_predictions = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
-            langfuse.score(
+            langfuse.create_score(
                 trace_id=dataset_item_trace_id,
                 name="error_running_evaluation",
                 value=0,
             )
         except Exception as e:
             logger.exception(f"Error running evaluation: {e}")
-            langfuse.score(
+            langfuse.create_score(
                 trace_id=dataset_item_trace_id,
                 name="error_running_evaluation",
                 value=1,
@@ -152,31 +153,31 @@ def run_relevant_warnings_evaluation_on_item(
     bugs_not_found = [i for i in range(len(list_of_issues)) if i not in bugs_matched]
     scores_content = [score.match_score for score in valid_scores]
     location_match = [score.location_match for score in valid_scores]
-    langfuse.score(
+    langfuse.create_score(
         comment=f"Expected number of bugs: {len(list_of_issues)}; Actual bugs found: {[ (suggestion_idx, bug_idx) for suggestion_idx, bug_idx in zip(bug_predictions_matched, bugs_matched)]}",
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="bugs_found_count"),
         value=len(bugs_matched),
     )
-    langfuse.score(
+    langfuse.create_score(
         comment=f"Individual bug location matches: {location_match}",
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="location_match"),
         value=sum(location_match),
     )
-    langfuse.score(
+    langfuse.create_score(
         comment=f"Individual bug content matches: {scores_content}",
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="content_match"),
         value=sum(scores_content),
     )
-    langfuse.score(
+    langfuse.create_score(
         comment=f"Bugs not found: {bugs_not_found}",
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="bugs_not_found"),
         value=len(bugs_not_found),
     )
-    langfuse.score(
+    langfuse.create_score(
         comment=f"Suggestions not matched to any bug: {bug_predictions_not_matched}",
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="noise"),

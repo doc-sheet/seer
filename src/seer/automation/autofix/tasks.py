@@ -9,6 +9,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
+from seer.langfuse import get_dataset_item
 from seer.automation.agent.models import Message
 from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -1008,7 +1009,7 @@ def run_autofix_evaluation_on_item(
 ):
     langfuse = Langfuse()
 
-    dataset_item = langfuse.get_dataset_item(item_id)
+    dataset_item = get_dataset_item(langfuse, item_id)
 
     logger.info(
         f"Starting autofix evaluation for item {item_id}, number {item_index}/{item_count}, with run name '{run_name}'."
@@ -1039,34 +1040,34 @@ def run_autofix_evaluation_on_item(
     if root_cause_scores:
         root_cause_score, root_cause_verdict, root_cause_helpful = root_cause_scores
 
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model, n_panel=scoring_n_panel, name="rc_is_correct"
             ),
             value=1 if root_cause_verdict else 0,
         )
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model, n_panel=scoring_n_panel, name="rc_is_helpful"
             ),
             value=1 if root_cause_helpful else 0,
         )
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
             ),
             value=root_cause_score,
         )
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="rc_score"),
             value=root_cause_score,
         )
     else:
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
@@ -1088,14 +1089,14 @@ def run_autofix_evaluation_on_item(
     if solution_scores:
         mean_score, verdict = solution_scores
 
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model, n_panel=scoring_n_panel, name="solution_is_fixed"
             ),
             value=1 if verdict else 0,
         )
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model,
@@ -1104,7 +1105,7 @@ def run_autofix_evaluation_on_item(
             ),
             value=mean_score,
         )
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model, n_panel=scoring_n_panel, name="solution_score"
@@ -1112,7 +1113,7 @@ def run_autofix_evaluation_on_item(
             value=mean_score,
         )
     else:
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model,
@@ -1136,14 +1137,14 @@ def run_autofix_evaluation_on_item(
     if coding_scores:
         mean_correctness_score, mean_conciseness_score = coding_scores
 
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model, n_panel=scoring_n_panel, name="code_correctness_score"
             ),
             value=mean_correctness_score,
         )
-        langfuse.score(
+        langfuse.create_score(
             trace_id=dataset_item_trace_id,
             name=make_score_name(
                 model=scoring_model, n_panel=scoring_n_panel, name="code_conciseness_score"
