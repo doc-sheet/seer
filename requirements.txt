@@ -12,7 +12,7 @@ aiohttp==3.13.3
     #   fsspec
 aiosignal==1.4.0
     # via aiohttp
-alembic==1.18.1
+alembic==1.18.2
     # via
     #   flask-migrate
     #   pytest-alembic
@@ -29,7 +29,6 @@ anyio==4.12.1
     #   anthropic
     #   google-genai
     #   httpx
-    #   langfuse
     #   openai
     #   starlette
     #   watchfiles
@@ -52,6 +51,8 @@ blinker==1.9.0
     # via sentry-sdk
 build==1.4.0
     # via pip-tools
+cachetools==6.2.6
+    # via -r requirements-constraints.txt
 celery==5.3.6
     # via
     #   -r requirements-constraints.txt
@@ -173,7 +174,7 @@ flatbuffers==25.12.19
     # via onnxruntime
 flower==2.0.1
     # via -r requirements-constraints.txt
-fonttools==4.60.2
+fonttools==4.61.1
     # via
     #   -r requirements-constraints.txt
     #   matplotlib
@@ -243,6 +244,7 @@ googleapis-common-protos==1.72.0
     #   google-api-core
     #   grpc-google-iam-v1
     #   grpcio-status
+    #   opentelemetry-exporter-otlp-proto-http
 grpc-google-iam-v1==0.14.3
     # via
     #   google-cloud-resource-manager
@@ -308,9 +310,10 @@ idna==3.11
     #   -r requirements-constraints.txt
     #   anyio
     #   httpx
-    #   langfuse
     #   requests
     #   yarl
+importlib-metadata==8.7.1
+    # via opentelemetry-api
 importlib-resources==6.0.1
     # via
     #   -r requirements-constraints.txt
@@ -443,7 +446,9 @@ onnx==1.16.0
 onnxruntime==1.23.2
     # via chromadb
 openai==2.16.0
-    # via -r requirements-constraints.txt
+    # via
+    #   -r requirements-constraints.txt
+    #   langfuse
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
 openapi-schema-validator==0.6.3
@@ -452,11 +457,31 @@ openapi-schema-validator==0.6.3
     #   openapi-spec-validator
 openapi-spec-validator==0.7.2
     # via openapi-core
+opentelemetry-api==1.39.1
+    # via
+    #   langfuse
+    #   opentelemetry-exporter-otlp-proto-http
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
+opentelemetry-exporter-otlp-proto-common==1.39.1
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-http==1.39.1
+    # via langfuse
+opentelemetry-proto==1.39.1
+    # via
+    #   opentelemetry-exporter-otlp-proto-common
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-sdk==1.39.1
+    # via
+    #   langfuse
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-semantic-conventions==0.60b1
+    # via opentelemetry-sdk
 optimum==1.16.2
     # via -r requirements-constraints.txt
 overrides==7.7.0
     # via chromadb
-packaging==24.2
+packaging==25.0
     # via
     #   -r requirements-constraints.txt
     #   build
@@ -537,6 +562,7 @@ protobuf==5.29.5
     #   grpcio-status
     #   onnx
     #   onnxruntime
+    #   opentelemetry-proto
     #   proto-plus
     #   sentry-protos
     #   transformers
@@ -614,7 +640,7 @@ python-dateutil==2.8.2
     #   pygithub
 python-dotenv==1.2.1
     # via uvicorn
-python-gitlab==8.0.0
+python-gitlab==4.13.0
     # via -r requirements-constraints.txt
 pytz==2021.3
     # via
@@ -633,6 +659,8 @@ pyyaml==6.0.1
     #   vcrpy
 rapidfuzz==3.10.1
     # via -r requirements-constraints.txt
+redis==7.1.0
+    # via -r requirements-constraints.txt
 referencing==0.30.2
     # via
     #   jsonschema
@@ -645,7 +673,7 @@ regex==2023.8.8
     #   -r requirements-constraints.txt
     #   nltk
     #   transformers
-requests==2.32.4
+requests==2.32.5
     # via
     #   -r requirements-constraints.txt
     #   chromadb
@@ -661,6 +689,7 @@ requests==2.32.4
     #   jsonschema-path
     #   jsonschema-spec
     #   langfuse
+    #   opentelemetry-exporter-otlp-proto-http
     #   posthog
     #   pygithub
     #   python-gitlab
@@ -829,6 +858,10 @@ typing-extensions==4.15.0
     #   huggingface-hub
     #   mypy
     #   openai
+    #   opentelemetry-api
+    #   opentelemetry-exporter-otlp-proto-http
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
     #   posthog
     #   psycopg
     #   pydantic
@@ -894,8 +927,9 @@ yarl==1.22.0
     # via
     #   aiohttp
     #   vcrpy
+zipp==3.23.0
+    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip
 # setuptools
-cachetools==5.3.3
