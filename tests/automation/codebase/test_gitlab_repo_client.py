@@ -212,7 +212,7 @@ class TestGitLabRepoClient:
         # Mock file patch
         mock_patch = MagicMock()
         mock_patch.path = "test.py"
-        mock_patch.type = "create"
+        mock_patch.type = "A"  # "A" = Add/Create in git diff format
         mock_patch.apply.return_value = "new content"
 
         result = gitlab_client.create_branch_from_changes(
@@ -246,7 +246,7 @@ class TestGitLabRepoClient:
         # Mock file patch
         mock_patch = MagicMock()
         mock_patch.path = "test.py"
-        mock_patch.type = "create"
+        mock_patch.type = "A"  # "A" = Add/Create in git diff format
         mock_patch.apply.return_value = "new content"
 
         result = gitlab_client.create_branch_from_changes(
