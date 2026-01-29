@@ -1019,10 +1019,11 @@ def run_autofix_evaluation_on_item(
     scoring_model = "o3-mini-2025-01-31"
 
     dataset_item_trace_id = None
-    with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
-        dataset_item_trace_id = trace_id
+    # In langfuse 3.x, observe() is replaced by run() which yields a span
+    with dataset_item.run(run_name=run_name, run_description=run_description) as span:
+        dataset_item_trace_id = span.trace_id
         try:
-            final_state = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
+            final_state = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=span.trace_id)  # type: ignore
         except Exception as e:
             logger.exception(f"Error running evaluation: {e}")
 

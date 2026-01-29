@@ -110,10 +110,11 @@ def run_relevant_warnings_evaluation_on_item(
     scoring_model = "gemini-2.5-pro-preview-03-25"
 
     dataset_item_trace_id = None
-    with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
-        dataset_item_trace_id = trace_id
+    # In langfuse 3.x, observe() is replaced by run() which yields a span
+    with dataset_item.run(run_name=run_name, run_description=run_description) as span:
+        dataset_item_trace_id = span.trace_id
         try:
-            bug_predictions = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
+            bug_predictions = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=span.trace_id)  # type: ignore
             langfuse.create_score(
                 trace_id=dataset_item_trace_id,
                 name="error_running_evaluation",
