@@ -58,13 +58,17 @@ jobs:
 
       - name: Generate image tags
         id: tags
+        env:
+          # Pass user-controlled inputs through env vars to prevent script injection
+          INPUT_TAG: ${{ inputs.tag }}
+          HEAD_REF: ${{ github.head_ref }}
         run: |
           REGISTRY="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}"
           SHA_SHORT=$(git rev-parse --short HEAD)
 
           # Use input tag if provided, otherwise use commit SHA
-          if [ -n "${{ inputs.tag }}" ]; then
-            CUSTOM_TAG="${{ inputs.tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            CUSTOM_TAG="$INPUT_TAG"
           else
             CUSTOM_TAG="${SHA_SHORT}"
           fi
@@ -80,7 +84,7 @@ jobs:
 
           # Add branch name tag for PRs
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BRANCH_TAG=$(echo "${{ github.head_ref }}" | sed 's/[^a-zA-Z0-9]/-/g' | cut -c1-50)
+            BRANCH_TAG=$(echo "$HEAD_REF" | sed 's/[^a-zA-Z0-9]/-/g' | cut -c1-50)
             TAGS="${TAGS},${REGISTRY}:${BRANCH_TAG}"
           fi
 

@@ -173,7 +173,7 @@ flatbuffers==25.12.19
     # via onnxruntime
 flower==2.0.1
     # via -r requirements-constraints.txt
-fonttools==4.43.0
+fonttools==4.60.2
     # via
     #   -r requirements-constraints.txt
     #   matplotlib
@@ -645,7 +645,7 @@ regex==2023.8.8
     #   -r requirements-constraints.txt
     #   nltk
     #   transformers
-requests==2.32.2
+requests==2.32.4
     # via
     #   -r requirements-constraints.txt
     #   chromadb

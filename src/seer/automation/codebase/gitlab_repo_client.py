@@ -75,7 +75,7 @@ class GitLabRepoClient(BaseRepoClient):
             )
 
         instance_url = get_gitlab_instance_url()
-        self.gitlab_client = gitlab.Gitlab(instance_url, private_token=token)
+        self.gitlab_client = gitlab.Gitlab(instance_url, private_token=token, timeout=30)
 
         # Get project - GitLab supports both numeric IDs and path-based IDs (owner/name)
         try:
@@ -136,7 +136,7 @@ class GitLabRepoClient(BaseRepoClient):
 
         try:
             instance_url = get_gitlab_instance_url()
-            gl = gitlab.Gitlab(instance_url, private_token=token)
+            gl = gitlab.Gitlab(instance_url, private_token=token, timeout=30)
             project = gl.projects.get(repo.full_name)
 
             # Check access level - Developer (30) or higher can push
@@ -168,7 +168,7 @@ class GitLabRepoClient(BaseRepoClient):
 
         try:
             instance_url = get_gitlab_instance_url()
-            gl = gitlab.Gitlab(instance_url, private_token=token)
+            gl = gitlab.Gitlab(instance_url, private_token=token, timeout=30)
             project = gl.projects.get(repo.full_name)
 
             # If we can get the project, we have at least read access
@@ -328,12 +328,21 @@ class GitLabRepoClient(BaseRepoClient):
                 "Please check if the repository exists and the provided token is valid."
             )
 
-        # Extract tarball - use the base class helper
+        # Extract tarball - use safe extraction with path traversal protection
         import shutil
         import tarfile
 
+        def _safe_extractall(tar: tarfile.TarFile, path: str) -> None:
+            """Safely extract tar archive, blocking path traversal attacks."""
+            base = os.path.realpath(path)
+            for member in tar.getmembers():
+                member_path = os.path.realpath(os.path.join(path, member.name))
+                if not member_path.startswith(base + os.sep) and member_path != base:
+                    raise Exception(f"Blocked path traversal attempt in tar archive: {member.name}")
+            tar.extractall(path=path)
+
         with tarfile.open(tarfile_path, "r:gz") as tar:
-            tar.extractall(path=tmp_repo_dir)
+            _safe_extractall(tar, tmp_repo_dir)
             extracted_folders = [
                 name
                 for name in os.listdir(tmp_repo_dir)

@@ -443,7 +443,7 @@ class BaseRepoClient(ABC):
 
         tarfile_path = os.path.join(tmp_dir, f"{sha}.tar.gz")
 
-        response = requests.get(archive_url, stream=True, headers=auth_headers)
+        response = requests.get(archive_url, stream=True, headers=auth_headers, timeout=30)
         if response.status_code == 200:
             with open(tarfile_path, "wb") as f:
                 f.write(response.content)
@@ -460,9 +460,18 @@ class BaseRepoClient(ABC):
                 "Please check if the repository exists and the provided token is valid."
             )
 
-        # Extract tarball into the output directory
+        # Extract tarball into the output directory with path traversal protection
+        def _safe_extractall(tar: tarfile.TarFile, path: str) -> None:
+            """Safely extract tar archive, blocking path traversal attacks."""
+            base = os.path.realpath(path)
+            for member in tar.getmembers():
+                member_path = os.path.realpath(os.path.join(path, member.name))
+                if not member_path.startswith(base + os.sep) and member_path != base:
+                    raise Exception(f"Blocked path traversal attempt in tar archive: {member.name}")
+            tar.extractall(path=path)
+
         with tarfile.open(tarfile_path, "r:gz") as tar:
-            tar.extractall(path=tmp_repo_dir)
+            _safe_extractall(tar, tmp_repo_dir)
             extracted_folders = [
                 name
                 for name in os.listdir(tmp_repo_dir)
