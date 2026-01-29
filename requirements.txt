@@ -34,6 +34,8 @@ anyio==4.12.1
     #   watchfiles
 asgiref==3.11.0
     # via openapi-core
+async-timeout==5.0.1
+    # via -r requirements-constraints.txt
 attrs==25.4.0
     # via
     #   aiohttp
