@@ -6,7 +6,6 @@ from langfuse.api.resources.commons.errors import NotFoundError
 from langfuse.api.resources.commons.types.dataset_status import DatasetStatus
 
 from celery_app.app import celery_app
-from seer.langfuse import get_dataset_item
 from seer.automation.autofix.evaluations import make_score_name
 from seer.automation.codegen.evals.evaluations import (
     evaluate_bug_predictions,
@@ -19,6 +18,7 @@ from seer.automation.codegen.evals.models import (
 )
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
+from seer.langfuse import get_dataset_item
 
 logger = logging.getLogger(__name__)
 

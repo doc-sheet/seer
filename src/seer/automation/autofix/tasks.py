@@ -9,7 +9,6 @@ from celery.exceptions import SoftTimeLimitExceeded
 from langfuse import Langfuse
 
 from celery_app.app import celery_app
-from seer.langfuse import get_dataset_item
 from seer.automation.agent.models import Message
 from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -65,6 +64,7 @@ from seer.configuration import AppConfig
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 from seer.dependency_injection import inject, injected
 from seer.events import SeerEventNames, log_seer_event
+from seer.langfuse import get_dataset_item
 from seer.rpc import get_sentry_client
 
 logger = logging.getLogger(__name__)

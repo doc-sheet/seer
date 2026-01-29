@@ -25,8 +25,8 @@ from langfuse.api.resources.commons.types.dataset_run_item import DatasetRunItem
 from langfuse.api.resources.commons.types.dataset_run_with_items import DatasetRunWithItems
 
 from seer.automation.codegen.evals.models import EvalItemInput, EvalItemOutput
-from seer.langfuse import fetch_trace, get_dataset_item
 from seer.automation.codegen.models import BugPrediction
+from seer.langfuse import fetch_trace, get_dataset_item
 
 
 @click.group()
