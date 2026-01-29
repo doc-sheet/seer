@@ -211,14 +211,14 @@ class TestProviderParameterResolution:
     def test_anthropic_provider_parameter_resolution(self):
         """Test parameter resolution works correctly with Anthropic provider model creation"""
         claude_model = AnthropicProvider.model(
-            "claude-3-5-sonnet@20240620",
+            "claude-sonnet-4@20250514",
             region="us-east-1",
             temperature=0.7,
             max_tokens=4000,
             timeout=90.0,
         )
 
-        assert claude_model.model_name == "claude-3-5-sonnet@20240620"
+        assert claude_model.model_name == "claude-sonnet-4@20250514"
         assert claude_model.region == "us-east-1"
         assert claude_model.defaults.temperature == 0.7
         assert claude_model.defaults.max_tokens == 4000
@@ -255,7 +255,7 @@ class TestProviderParameterResolution:
 
         # Anthropic-specific parameters
         anthropic_model = AnthropicProvider.model(
-            "claude-3-5-sonnet@20240620",
+            "claude-sonnet-4@20250514",
             region="us-west-2",  # Anthropic-specific region handling
             timeout=120.0,  # Anthropic-specific timeout
         )
@@ -285,7 +285,7 @@ class TestFallbackBehavior:
         models = [
             OpenAiProvider.model("gpt-4", temperature=0.1, max_tokens=100),
             OpenAiProvider.model("gpt-3.5-turbo", temperature=0.5, max_tokens=200),
-            AnthropicProvider.model("claude-3-5-sonnet@20240620", temperature=0.3, max_tokens=150),
+            AnthropicProvider.model("claude-sonnet-4@20250514", temperature=0.3, max_tokens=150),
         ]
 
         # Each model should maintain its own defaults
@@ -337,7 +337,7 @@ class TestFallbackBehavior:
         # Create models from different providers
         models = [
             OpenAiProvider.model("gpt-4", temperature=0.1),
-            AnthropicProvider.model("claude-3-5-sonnet@20240620", temperature=0.3),
+            AnthropicProvider.model("claude-sonnet-4@20250514", temperature=0.3),
             GeminiProvider.model("gemini-2.0-flash-001", temperature=0.5),
         ]
 
@@ -358,7 +358,7 @@ class TestFallbackBehavior:
         llm_client = LlmClient()
 
         # Create a model that should have region preferences
-        base_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+        base_model = AnthropicProvider.model("claude-sonnet-4@20250514")
 
         # Mock the get_region_preference to return multiple regions
         with patch.object(
@@ -396,7 +396,7 @@ class TestFallbackBehavior:
         llm_client = LlmClient()
 
         # Create a model with explicit region
-        base_model = AnthropicProvider.model("claude-3-5-sonnet@20240620", region="explicit-region")
+        base_model = AnthropicProvider.model("claude-sonnet-4@20250514", region="explicit-region")
 
         call_count = 0
         attempted_regions = []
@@ -422,7 +422,7 @@ class TestFallbackBehavior:
         llm_client = LlmClient()
 
         # Create multiple models
-        model1 = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+        model1 = AnthropicProvider.model("claude-sonnet-4@20250514")
         model2 = GeminiProvider.model("gemini-2.0-flash-001")
 
         call_count = 0
@@ -434,7 +434,7 @@ class TestFallbackBehavior:
             operation_calls.append((model.model_name, model.region))
 
             # Fail for first model's regions, succeed on second model's first region
-            if model.model_name == "claude-3-5-sonnet@20240620":
+            if model.model_name == "claude-sonnet-4@20250514":
                 from anthropic import RateLimitError
 
                 raise RateLimitError(
@@ -459,8 +459,8 @@ class TestFallbackBehavior:
 
             # Should have tried both regions of model1, then first region of model2
             expected_calls = [
-                ("claude-3-5-sonnet@20240620", "us-east5"),
-                ("claude-3-5-sonnet@20240620", "global"),
+                ("claude-sonnet-4@20250514", "us-east5"),
+                ("claude-sonnet-4@20250514", "global"),
                 ("gemini-2.0-flash-001", "us-central1"),
             ]
             assert operation_calls == expected_calls
@@ -471,7 +471,7 @@ class TestFallbackBehavior:
         llm_client = LlmClient()
 
         # Create a model
-        base_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+        base_model = AnthropicProvider.model("claude-sonnet-4@20250514")
 
         call_count = 0
         attempted_regions = []
@@ -693,7 +693,7 @@ class TestFallbackExceptionHandling:
         """Set up test providers for each test"""
         self.llm_client = LlmClient()
         self.openai_provider = OpenAiProvider.model("gpt-4")
-        self.anthropic_provider = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+        self.anthropic_provider = AnthropicProvider.model("claude-sonnet-4@20250514")
         self.gemini_provider = GeminiProvider.model("gemini-1.5-pro")
 
     def test_timeout_exceptions_are_fallback_worthy(self):
@@ -1122,7 +1122,7 @@ class TestFallbackExceptionIntegration:
         """Set up test client and providers"""
         self.llm_client = LlmClient()
         self.openai_provider = OpenAiProvider.model("gpt-4")
-        self.anthropic_provider = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+        self.anthropic_provider = AnthropicProvider.model("claude-sonnet-4@20250514")
         self.gemini_provider = GeminiProvider.model("gemini-1.5-pro")
 
         # Create mock response objects for use in tests
