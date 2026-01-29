@@ -2,7 +2,7 @@ import logging
 import os
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from typing import Optional
 
 import sentry_sdk
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
@@ -21,6 +21,7 @@ from seer.automation.autofix.components.insight_sharing.component import create_
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
 from seer.automation.state import State
 from seer.dependency_injection import copy_modules_initializer
+from seer.langfuse import langfuse_context
 from seer.utils import retry_once_with_modified_input
 
 logger = logging.getLogger(__name__)

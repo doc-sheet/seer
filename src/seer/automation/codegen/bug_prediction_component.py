@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from typing import Literal, TypeAlias
 
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
@@ -25,6 +25,7 @@ from seer.automation.codegen.models import (
 from seer.automation.codegen.prompts import BugPredictionPrompts
 from seer.automation.component import BaseComponent
 from seer.dependency_injection import copy_modules_initializer, inject, injected
+from seer.langfuse import langfuse_context
 
 
 class FilterFilesComponent(BaseComponent[FilterFilesRequest, FilterFilesOutput]):

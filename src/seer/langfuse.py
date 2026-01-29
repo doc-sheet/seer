@@ -1,7 +1,7 @@
 import logging
+from typing import Any
 
-from langfuse import Langfuse
-from langfuse.decorators import langfuse_context
+from langfuse import Langfuse, get_client
 
 from seer.configuration import AppConfig
 from seer.dependency_injection import Module, inject, injected
@@ -9,6 +9,59 @@ from seer.dependency_injection import Module, inject, injected
 logger = logging.getLogger(__name__)
 
 langfuse_module = Module()
+
+
+class LangfuseContext:
+    """
+    Compatibility layer for langfuse 3.x.
+    Provides backward-compatible methods that were in langfuse.decorators.langfuse_context.
+    """
+
+    def get_current_trace_id(self) -> str | None:
+        return get_client().get_current_trace_id()
+
+    def get_current_observation_id(self) -> str | None:
+        return get_client().get_current_observation_id()
+
+    def get_current_trace_url(self) -> str | None:
+        return get_client().get_trace_url()
+
+    def update_current_trace(self, **kwargs) -> None:
+        get_client().update_current_trace(**kwargs)
+
+    def update_current_observation(
+        self,
+        *,
+        name: str | None = None,
+        model: str | None = None,
+        usage: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        **kwargs,
+    ) -> None:
+        """
+        Backward-compatible method for updating current observation.
+        In langfuse 3.x, this maps to update_current_generation for model/usage
+        or update_current_span for other updates.
+        """
+        client = get_client()
+        if model is not None or usage is not None:
+            # Use update_current_generation for model/usage updates
+            client.update_current_generation(
+                name=name,
+                model=model,
+                usage_details=usage,
+                metadata=metadata,
+            )
+        else:
+            # Use update_current_span for other updates
+            client.update_current_span(
+                name=name,
+                metadata=metadata,
+            )
+
+
+# Global instance for backward compatibility
+langfuse_context = LangfuseContext()
 
 
 @langfuse_module.provider

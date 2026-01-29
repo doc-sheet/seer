@@ -1,7 +1,7 @@
 import logging
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient

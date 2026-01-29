@@ -2,7 +2,7 @@ import logging
 from typing import Any
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 from celery_app.app import celery_app
 from seer.automation.autofix.components.change_describer import (

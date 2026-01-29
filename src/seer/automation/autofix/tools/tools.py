@@ -7,7 +7,7 @@ from concurrent.futures import FIRST_EXCEPTION, Future, ThreadPoolExecutor, as_c
 from typing import Any, Set, cast
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import ClaudeTool, FunctionTool

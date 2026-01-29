@@ -38,10 +38,11 @@ def bootup(
     *, start_model_loading: bool, integrations: list[Integration], config: AppConfig = injected
 ):
     initialize_sentry_sdk(integrations)
-    with sentry_sdk.metrics.timing(key="seer_bootup_time"):
-        config.do_validation()
-        initialize_database()
-        initialize_models(start_model_loading)
+    # Note: sentry_sdk.metrics.timing was removed in sentry-sdk 2.x
+    # The metrics API is deprecated and will be fully removed in 3.x
+    config.do_validation()
+    initialize_database()
+    initialize_models(start_model_loading)
 
 
 @inject

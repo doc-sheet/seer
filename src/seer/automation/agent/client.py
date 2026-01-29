@@ -32,7 +32,7 @@ from google.genai.types import (
     ThinkingConfig,
 )
 from google.genai.types import Tool as GeminiTool
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
 from requests.exceptions import ChunkedEncodingError
@@ -62,6 +62,7 @@ from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
+from seer.langfuse import langfuse_context
 from seer.utils import backoff_on_exception, backoff_on_generator
 
 logger = logging.getLogger(__name__)

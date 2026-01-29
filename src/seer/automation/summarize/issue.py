@@ -1,7 +1,7 @@
 import textwrap
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import GeminiProvider, LlmClient

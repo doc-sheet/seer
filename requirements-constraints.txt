@@ -119,3 +119,4 @@ tsmoothie==1.0.*
 datadog==0.51.*
 flower==2.0.1
 GitPython==3.1.*
+cachetools>=5.0.0

@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 import sentry_sdk
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
 from pydantic import BaseModel, Field
 
 from seer.automation.agent.client import LlmClient, LlmProvider
@@ -13,6 +13,7 @@ from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.utils import AgentError
 from seer.dependency_injection import inject, injected
+from seer.langfuse import langfuse_context
 
 logger = logging.getLogger("autofix")
 

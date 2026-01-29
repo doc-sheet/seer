@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 import requests
-from langfuse.decorators import observe
+from langfuse import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app

@@ -536,7 +536,7 @@ class TestGitLabRepoClient:
     def test_build_commit_action_for_patch_create(self, gitlab_client):
         mock_patch = MagicMock()
         mock_patch.path = "new_file.py"
-        mock_patch.type = "create"
+        mock_patch.type = "A"  # "A" = Add/Create in git diff format
         mock_patch.apply.return_value = "new content"
 
         result = gitlab_client._build_commit_action_for_patch(mock_patch, "main")
@@ -552,7 +552,7 @@ class TestGitLabRepoClient:
 
         mock_patch = MagicMock()
         mock_patch.path = "existing.py"
-        mock_patch.type = "edit"
+        mock_patch.type = "M"  # "M" = Modify in git diff format
         mock_patch.apply.return_value = "updated content"
 
         result = gitlab_client._build_commit_action_for_patch(mock_patch, "main")
@@ -568,7 +568,7 @@ class TestGitLabRepoClient:
 
         mock_patch = MagicMock()
         mock_patch.path = "to_delete.py"
-        mock_patch.type = "delete"
+        mock_patch.type = "D"  # "D" = Delete in git diff format
         mock_patch.apply.return_value = None
 
         result = gitlab_client._build_commit_action_for_patch(mock_patch, "main")

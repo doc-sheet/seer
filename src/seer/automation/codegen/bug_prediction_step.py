@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 import requests
-from langfuse.decorators import observe
+from langfuse import observe
 
 from celery_app.app import celery_app
 from integrations.codecov.codecov_auth import get_codecov_auth_header

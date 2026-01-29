@@ -1,7 +1,7 @@
 import logging
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 from seer.automation.autofix.components.coding.models import FuzzyDiffChunk, PlanTaskPromptXml
 from seer.automation.autofix.utils import find_original_snippet

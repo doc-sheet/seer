@@ -1,6 +1,6 @@
 import logging
 
-from langfuse.decorators import observe
+from langfuse import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig

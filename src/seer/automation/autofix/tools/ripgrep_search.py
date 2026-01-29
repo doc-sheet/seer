@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 MAX_RIPGREP_TIMEOUT_SECONDS = 45
 MAX_RIPGREP_LINE_CHARACTER_LENGTH = 1024

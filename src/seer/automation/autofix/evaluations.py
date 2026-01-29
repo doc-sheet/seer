@@ -2,8 +2,10 @@ import logging
 import textwrap
 from typing import Literal, TypedDict
 
-from langfuse.client import DatasetItemClient
-from langfuse.decorators import observe
+from langfuse import observe
+
+# DatasetItemClient moved to private module in langfuse 3.x
+from langfuse._client.client import DatasetItemClient
 from pydantic import BaseModel
 from pydantic_xml import attr, element
 

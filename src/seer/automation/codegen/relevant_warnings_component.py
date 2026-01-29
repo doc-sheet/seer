@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from cachetools import LRUCache, cached  # type: ignore[import-untyped]
 from cachetools.keys import hashkey  # type: ignore[import-untyped]
-from langfuse.decorators import observe
+from langfuse import observe
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient

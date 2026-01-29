@@ -33,7 +33,8 @@ COPY pyproject.toml .
 
 # Install dependencies with uv (faster than pip)
 COPY setup.py requirements.txt ./
-# pytorch without gpu
+# pytorch without gpu (increase timeout for large downloads)
+ENV UV_HTTP_TIMEOUT=300
 RUN uv pip install --system torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
 RUN uv pip install --system -r requirements.txt
 
