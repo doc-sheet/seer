@@ -927,7 +927,7 @@ class AnthropicProvider(BaseLlmProvider):
             input_schema={
                 "type": "object",
                 "properties": {
-                    param["name"]: {
+                    str(param["name"]): {  # type: ignore[misc]
                         key: value
                         for key, value in {
                             "type": param["type"],

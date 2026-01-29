@@ -786,7 +786,7 @@ class BaseTools:
 
         handler = command_handlers.get(command)
         if handler:
-            return handler(
+            return handler(  # type: ignore[operator]
                 kwargs,
                 repo_name,
                 path,

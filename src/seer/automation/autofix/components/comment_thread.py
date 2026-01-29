@@ -64,8 +64,8 @@ class CommentThreadComponent(BaseComponent[CommentThreadRequest, CommentThreadOu
         )
         data = output.parsed
 
-        if data is None:
-            return CommentThreadOutput(
+        if data is None:  # type: ignore[unreachable]
+            return CommentThreadOutput(  # type: ignore[unreachable]
                 comment_in_response="Sorry, I'm not sure what to say.",
                 action_requested=False,
             )

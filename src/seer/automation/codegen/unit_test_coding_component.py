@@ -39,7 +39,7 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
     @observe(name="Generate unit tests")
     @ai_track(description="Generate unit tests")
     @inject
-    def invoke(
+    def invoke(  # type: ignore[override]
         self,
         request: CodeUnitTestRequest,
         is_codecov_request: bool,

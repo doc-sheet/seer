@@ -356,12 +356,14 @@ def score_solution(
     if any(result is None for result in results):
         return None
 
-    results = [result for result in results if result is not None]
+    valid_results: list[tuple[float, bool]] = [
+        result for result in results if result is not None
+    ]
 
-    mean_score = round(sum([result[0] for result in results]) / n_panel, 2)
+    mean_score = round(sum([result[0] for result in valid_results]) / n_panel, 2)
 
     # If at least half of the panel says the fix is correct, then the fix is correct.
-    verdict = sum(1 for result in results if result[1]) >= len(results) / 2
+    verdict = sum(1 for result in valid_results if result[1]) >= len(valid_results) / 2
 
     return mean_score, verdict
 
@@ -375,10 +377,12 @@ def score_coding(
     if any(result is None for result in results):
         return None
 
-    results = [result for result in results if result is not None]
+    valid_results: list[tuple[float, float]] = [
+        result for result in results if result is not None
+    ]
 
-    mean_correctness_score = round(sum([result[0] for result in results]) / n_panel, 2)
-    mean_conciseness_score = round(sum([result[1] for result in results]) / n_panel, 2)
+    mean_correctness_score = round(sum([result[0] for result in valid_results]) / n_panel, 2)
+    mean_conciseness_score = round(sum([result[1] for result in valid_results]) / n_panel, 2)
 
     return mean_correctness_score, mean_conciseness_score
 
@@ -392,14 +396,16 @@ def score_root_causes(
     if any(result is None for result in results):
         return None
 
-    results = [result for result in results if result is not None]
+    valid_results: list[tuple[float, bool, bool]] = [
+        result for result in results if result is not None
+    ]
 
-    mean_score = round(sum([result[0] for result in results]) / len(results), 2)
+    mean_score = round(sum([result[0] for result in valid_results]) / len(valid_results), 2)
 
     # If at least half of the panel says the fix is correct, then the fix is correct.
-    verdict = sum(1 for result in results if result[1]) >= len(results) / 2
+    verdict = sum(1 for result in valid_results if result[1]) >= len(valid_results) / 2
 
-    helpful = sum(1 for result in results if result[2]) >= len(results) / 2
+    helpful = sum(1 for result in valid_results if result[2]) >= len(valid_results) / 2
 
     return mean_score, verdict, helpful
 

@@ -215,7 +215,7 @@ def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueRespons
         }
     )
 
-    summary = summarize_issue(request, **extra_kwargs)
+    summary = summarize_issue(request, **extra_kwargs)  # type: ignore[arg-type]
 
     with Session() as session:
         db_state = summary.to_db_state(request.group_id)

@@ -878,6 +878,8 @@ def comment_on_thread(request: AutofixUpdateRequest):
             ),
         )
     )
+    if response is None:
+        return
     with state.update() as cur:
         if request.payload.is_agent_comment:
             cur.steps[step_index + 1].agent_comment_thread.messages.append(

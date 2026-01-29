@@ -77,7 +77,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
         with self.context.state.update() as cur:
             cur.usage += output.metadata.usage
 
-        if data is None:
-            return None
+        if data is None:  # type: ignore[unreachable]
+            return None  # type: ignore[unreachable]
 
         return data

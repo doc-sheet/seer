@@ -190,11 +190,11 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
 
                 self.context.event_manager.add_log("Formatting for human consumption...")
 
-                de_config = {
+                de_config: dict[str, object] = {
                     "model": GeminiProvider.model("gemini-2.0-flash-001"),
                 }
 
-                us_config = {
+                us_config: dict[str, object] = {
                     "models": [
                         GeminiProvider.model(
                             "gemini-2.5-flash-preview-04-17",
@@ -211,7 +211,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     response_format=SolutionOutput,
                     run_name="Solution Extraction & Formatting",
                     max_tokens=8192,
-                    **(de_config if config.SENTRY_REGION == "de" else us_config),
+                    **(de_config if config.SENTRY_REGION == "de" else us_config),  # type: ignore[arg-type]
                 )
 
                 if not formatted_response or not formatted_response.parsed:

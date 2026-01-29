@@ -72,8 +72,8 @@ class FilterFilesComponent(BaseComponent[FilterFilesRequest, FilterFilesOutput])
             response_format=list[FilenameFromThisPR],
         )
 
-        if response.parsed is None:
-            self.logger.warning(
+        if response.parsed is None:  # type: ignore[unreachable]
+            self.logger.warning(  # type: ignore[unreachable]
                 "Failed to filter files intelligently.",
             )
             pr_files_picked = pr_files_filterable
@@ -244,8 +244,8 @@ class FormatterComponent(BaseComponent[FormatterRequest, FormatterOutput]):
             max_tokens=8192,
         )
 
-        if response.parsed is None:
-            self.logger.warning("Failed to extract structured information from bug prediction")
+        if response.parsed is None:  # type: ignore[unreachable]
+            self.logger.warning("Failed to extract structured information from bug prediction")  # type: ignore[unreachable]
             return FormatterOutput(bug_predictions=[])
 
         return FormatterOutput(bug_predictions=response.parsed)

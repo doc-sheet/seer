@@ -512,8 +512,8 @@ class PredictRelevantWarningsComponent(
                 max_tokens=2048,
                 timeout=15.0,
             )
-            if completion.parsed is None:  # Gemini quirk
-                self.logger.warning(
+            if completion.parsed is None:  # Gemini quirk  # type: ignore[unreachable]
+                self.logger.warning(  # type: ignore[unreachable]
                     f"No response from LLM for warning {warning_and_pr_file.warning.id} and issue {issue.id}"
                 )
                 continue
@@ -593,6 +593,6 @@ class StaticAnalysisSuggestionsComponent(
             temperature=0.0,
             max_tokens=8192,
         )
-        if completion.parsed is None:
-            return None
+        if completion.parsed is None:  # type: ignore[unreachable]
+            return None  # type: ignore[unreachable]
         return CodePredictStaticAnalysisSuggestionsOutput(suggestions=completion.parsed.suggestions)

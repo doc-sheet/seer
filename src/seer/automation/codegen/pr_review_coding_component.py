@@ -26,7 +26,7 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
     @observe(name="Review PR")
     @ai_track(description="Review PR")
     @inject
-    def invoke(
+    def invoke(  # type: ignore[override]
         self,
         request: CodePrReviewRequest,
         is_codecov_request: bool,

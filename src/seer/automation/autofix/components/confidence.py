@@ -64,8 +64,8 @@ class ConfidenceComponent(BaseComponent[ConfidenceRequest, ConfidenceOutput]):
         )
         data = output.parsed
 
-        if data is None:
-            return ConfidenceOutput(
+        if data is None:  # type: ignore[unreachable]
+            return ConfidenceOutput(  # type: ignore[unreachable]
                 output_confidence_score=0.5,
                 proceed_confidence_score=0.5,
             )

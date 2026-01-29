@@ -245,7 +245,7 @@ def create_insight_output(
 
     memory = [msg for msg in memory if msg.role != "system"]
 
-    completion = llm_client.generate_structured(
+    structured_completion = llm_client.generate_structured(
         messages=memory,
         prompt=prompt_two,
         model=GeminiProvider.model("gemini-2.0-flash-001"),
@@ -253,8 +253,8 @@ def create_insight_output(
         max_tokens=4096,
         response_format=JustificationOutput,
     )
-    usage += completion.metadata.usage
-    justification = completion.parsed
+    usage += structured_completion.metadata.usage
+    justification = structured_completion.parsed
 
     answer = justification and justification.evidence or ""
     markdown_snippets = justification and justification.markdown_snippets or ""

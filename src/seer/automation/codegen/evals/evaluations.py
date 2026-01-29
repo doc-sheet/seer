@@ -31,10 +31,10 @@ def sync_run_evaluation_on_item(
       - Fetching the Sentry issues
     """
 
-    item = EvalItemInput.model_validate(item.input)
+    eval_item = EvalItemInput.model_validate(item.input)
 
     # Build the request from the item.
-    request = item.get_request()
+    request = eval_item.get_request()
     # Make sure we don't post to Overwatch.
     request.should_post_to_overwatch = False
 

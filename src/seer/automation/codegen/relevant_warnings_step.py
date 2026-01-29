@@ -284,7 +284,7 @@ class RelevantWarningsStep(CodegenStep):
             fixable_issues=fixable_issues,
             pr_files=pr_files,
         )
-        static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput = (
+        static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput | None = (
             static_analysis_suggestions_component.invoke(static_analysis_suggestions_request)
         )
 

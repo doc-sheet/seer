@@ -32,7 +32,7 @@ class RetryUnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTe
     @observe(name="Retry unit tests")
     @ai_track(description="Retry unit test generation")
     @inject
-    def invoke(
+    def invoke(  # type: ignore[override]
         self,
         request: CodeUnitTestRequest,
         previous_run_context: DbPrContextToUnitTestGenerationRunIdMapping,
