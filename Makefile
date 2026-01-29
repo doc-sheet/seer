@@ -117,11 +117,14 @@ vcr-encrypt-prep:
 	pip install -r scripts/requirements.txt
 	gcloud auth application-default login
 
+# VCR cassette encryption key URI - using kencove-prod GCP KMS
+VCR_KEK_URI:=gcp-kms://projects/kencove-prod/locations/global/keyRings/seer-cassettes/cryptoKeys/cassette-encryption
+
 .PHONY: vcr-encrypt
 CLEAN:=1
 vcr-encrypt: # Encrypts all vcr cassettes
-	python3 ./scripts/encrypt.py --mode=encrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption $(if $(filter 0,$(CLEAN)),,--clean)
+	python3 ./scripts/encrypt.py --mode=encrypt --kek_uri=$(VCR_KEK_URI) $(if $(filter 0,$(CLEAN)),,--clean)
 
 .PHONY: vcr-decrypt
 vcr-decrypt: # Decrypts all vcr cassettes. Use make vcr-decrypt CLEAN=1 to include --clean flag
-	python3 ./scripts/encrypt.py --mode=decrypt --kek_uri=gcp-kms://projects/ml-ai-420606/locations/global/keyRings/seer_cassette_encryption/cryptoKeys/seer_cassette_encryption $(if $(CLEAN) = 1,--clean,)
+	python3 ./scripts/encrypt.py --mode=decrypt --kek_uri=$(VCR_KEK_URI) $(if $(CLEAN) = 1,--clean,)
