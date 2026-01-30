@@ -77,8 +77,9 @@ class IssueSummaryForLlmToGenerate(BaseModel):
 @sentry_sdk.trace
 @inject
 def summarize_issue(
-    request: SummarizeIssueRequest, llm_client: LlmClient = injected
+    request: SummarizeIssueRequest, llm_client: LlmClient = injected, **kwargs
 ) -> IssueSummaryWithScores:
+    # kwargs accepts langfuse_tags, langfuse_session_id, langfuse_user_id for tracing
     event_details = EventDetails.from_event(
         event=request.issue.events[0], issue_title=request.issue.title
     )
