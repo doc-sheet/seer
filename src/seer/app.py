@@ -97,6 +97,14 @@ from seer.automation.codegen.tasks import (
     get_unittest_state,
 )
 from seer.automation.explorer.models import (
+    AutofixPromptRequest,
+    AutofixPromptResponse,
+    CodegenPrReviewRerunRequest,
+    CodegenPrReviewRerunResponse,
+    CodingAgentStateSetRequest,
+    CodingAgentStateSetResponse,
+    CodingAgentStateUpdateRequest,
+    CodingAgentStateUpdateResponse,
     ExplorerChatRequest,
     ExplorerChatResponse,
     ExplorerRunsRequest,
@@ -105,6 +113,10 @@ from seer.automation.explorer.models import (
     ExplorerStateResponse,
     ExplorerUpdateRequest,
     ExplorerUpdateResponse,
+    ProjectPreferenceBulkRequest,
+    ProjectPreferenceBulkResponse,
+    ProjectPreferenceBulkSetRequest,
+    ProjectPreferenceBulkSetResponse,
 )
 from seer.automation.preferences import (
     GetSeerProjectPreferenceRequest,
@@ -686,6 +698,65 @@ def explorer_update_endpoint(data: ExplorerUpdateRequest) -> ExplorerUpdateRespo
     return ExplorerUpdateResponse(
         status="not_available", message="Explorer updates not available in self-hosted mode"
     )
+
+
+# ============================================
+# Additional stub endpoints for Sentry 26.x compatibility
+# ============================================
+
+
+@json_api(blueprint, "/v1/automation/autofix/coding-agent/state/set")
+def coding_agent_state_set_endpoint(
+    data: CodingAgentStateSetRequest,
+) -> CodingAgentStateSetResponse:
+    """Set coding agent state - stub for self-hosted."""
+    return CodingAgentStateSetResponse(
+        status="not_available", message="Coding agent not available in self-hosted mode"
+    )
+
+
+@json_api(blueprint, "/v1/automation/autofix/coding-agent/state/update")
+def coding_agent_state_update_endpoint(
+    data: CodingAgentStateUpdateRequest,
+) -> CodingAgentStateUpdateResponse:
+    """Update coding agent state - stub for self-hosted."""
+    return CodingAgentStateUpdateResponse(
+        status="not_available", message="Coding agent not available in self-hosted mode"
+    )
+
+
+@json_api(blueprint, "/v1/automation/autofix/prompt")
+def autofix_prompt_endpoint(data: AutofixPromptRequest) -> AutofixPromptResponse:
+    """Get autofix prompt - stub for self-hosted."""
+    return AutofixPromptResponse(
+        prompt=None, message="Autofix prompt not available in self-hosted mode"
+    )
+
+
+@json_api(blueprint, "/v1/automation/codegen/pr-review/rerun")
+def codegen_pr_review_rerun_endpoint(
+    data: CodegenPrReviewRerunRequest,
+) -> CodegenPrReviewRerunResponse:
+    """Rerun PR review - stub for self-hosted."""
+    return CodegenPrReviewRerunResponse(
+        status="not_available", message="PR review rerun not available in self-hosted mode"
+    )
+
+
+@json_api(blueprint, "/v1/project-preference/bulk")
+def get_project_preference_bulk_endpoint(
+    data: ProjectPreferenceBulkRequest,
+) -> ProjectPreferenceBulkResponse:
+    """Get bulk project preferences - stub for self-hosted."""
+    return ProjectPreferenceBulkResponse(preferences={}, message="Bulk preferences retrieved")
+
+
+@json_api(blueprint, "/v1/project-preference/bulk-set")
+def set_project_preference_bulk_endpoint(
+    data: ProjectPreferenceBulkSetRequest,
+) -> ProjectPreferenceBulkSetResponse:
+    """Set bulk project preferences - stub for self-hosted."""
+    return ProjectPreferenceBulkSetResponse(status="ok", message="Bulk preferences set")
 
 
 @blueprint.route("/health/live", methods=["GET"])

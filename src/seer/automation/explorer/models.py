@@ -73,3 +73,104 @@ class ExplorerUpdateResponse(BaseModel):
 
     status: Literal["error", "not_available"] = "not_available"
     message: str = "Explorer updates not available in self-hosted mode"
+
+
+# ============================================
+# Additional stub models for missing endpoints
+# ============================================
+
+
+class CodingAgentStateSetRequest(BaseModel):
+    """Request to set coding agent state."""
+
+    run_id: str | None = None
+
+    class Config:
+        extra = "allow"
+
+
+class CodingAgentStateSetResponse(BaseModel):
+    """Response for setting coding agent state."""
+
+    status: Literal["ok", "not_available"] = "not_available"
+    message: str = "Coding agent not available in self-hosted mode"
+
+
+class CodingAgentStateUpdateRequest(BaseModel):
+    """Request to update coding agent state."""
+
+    run_id: str | None = None
+
+    class Config:
+        extra = "allow"
+
+
+class CodingAgentStateUpdateResponse(BaseModel):
+    """Response for updating coding agent state."""
+
+    status: Literal["ok", "not_available"] = "not_available"
+    message: str = "Coding agent not available in self-hosted mode"
+
+
+class AutofixPromptRequest(BaseModel):
+    """Request for autofix prompt."""
+
+    run_id: str | None = None
+
+    class Config:
+        extra = "allow"
+
+
+class AutofixPromptResponse(BaseModel):
+    """Response for autofix prompt."""
+
+    prompt: str | None = None
+    message: str = "Autofix prompt not available in self-hosted mode"
+
+
+class CodegenPrReviewRerunRequest(BaseModel):
+    """Request to rerun PR review."""
+
+    run_id: str | None = None
+
+    class Config:
+        extra = "allow"
+
+
+class CodegenPrReviewRerunResponse(BaseModel):
+    """Response for PR review rerun."""
+
+    status: Literal["ok", "not_available"] = "not_available"
+    message: str = "PR review rerun not available in self-hosted mode"
+
+
+class ProjectPreferenceBulkRequest(BaseModel):
+    """Request for bulk project preferences."""
+
+    project_ids: list[int] = []
+
+    class Config:
+        extra = "allow"
+
+
+class ProjectPreferenceBulkResponse(BaseModel):
+    """Response for bulk project preferences."""
+
+    preferences: dict[str, Any] = {}
+    message: str = "Bulk preferences retrieved"
+
+
+class ProjectPreferenceBulkSetRequest(BaseModel):
+    """Request to bulk set project preferences."""
+
+    preferences: dict[str, Any] = {}
+
+    class Config:
+        extra = "allow"
+
+
+class ProjectPreferenceBulkSetResponse(BaseModel):
+    """Response for bulk setting project preferences."""
+
+    status: Literal["ok", "not_available"] = "ok"
+    message: str = "Bulk preferences set"
