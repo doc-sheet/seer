@@ -14,6 +14,12 @@ help:
 pip: # Runs pip install with the requirements.txt file
 	pip install -r requirements.txt
 
+.PHONY: validate-deps
+validate-deps: # Quick check that all dependencies resolve correctly
+	@echo "Checking dependency resolution..."
+	pip-compile --dry-run --quiet requirements-constraints.txt -o /dev/null 2>&1 || (echo "Dependencies failed to resolve"; exit 1)
+	@echo "Dependencies resolve successfully"
+
 .PHONY: shell
 shell: .env # Opens a bash shell in the context of the project
 	docker compose run app bash

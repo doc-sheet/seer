@@ -42,7 +42,7 @@ COPY pyproject.toml .
 # Install dependencies
 COPY setup.py requirements.txt ./
 RUN pip install --upgrade pip==24.0
-RUN pip install -r requirements.txt --no-cache-dir
+RUN pip install -r requirements.txt --no-cache-dir && pip check
 
 # Copy model files (assuming they are in the 'models' directory)
 COPY models/ models/

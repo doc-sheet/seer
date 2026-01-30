@@ -96,6 +96,16 @@ from seer.automation.codegen.tasks import (
     codegen_unittest,
     get_unittest_state,
 )
+from seer.automation.explorer.models import (
+    ExplorerChatRequest,
+    ExplorerChatResponse,
+    ExplorerRunsRequest,
+    ExplorerRunsResponse,
+    ExplorerStateRequest,
+    ExplorerStateResponse,
+    ExplorerUpdateRequest,
+    ExplorerUpdateResponse,
+)
 from seer.automation.preferences import (
     GetSeerProjectPreferenceRequest,
     GetSeerProjectPreferenceResponse,
@@ -637,6 +647,45 @@ def translate_endpoint(data: TranslateRequest) -> TranslateResponses:
         raise InternalServerError from e
 
     return response
+
+
+# =============================================================================
+# Explorer Endpoints (Stub implementation for self-hosted)
+# =============================================================================
+# These endpoints return minimal responses to avoid 404 errors.
+# The full Explorer feature requires Sentry SaaS infrastructure.
+
+
+@json_api(blueprint, "/v1/automation/explorer/runs")
+def explorer_runs_endpoint(data: ExplorerRunsRequest) -> ExplorerRunsResponse:
+    """List explorer runs - returns empty list for self-hosted."""
+    return ExplorerRunsResponse(runs=[], message="Explorer runs not available in self-hosted mode")
+
+
+@json_api(blueprint, "/v1/automation/explorer/chat")
+def explorer_chat_endpoint(data: ExplorerChatRequest) -> ExplorerChatResponse:
+    """Explorer chat - returns not available for self-hosted."""
+    return ExplorerChatResponse(
+        status="not_available",
+        message="Explorer chat not available in self-hosted mode",
+        run_id=data.run_id,
+    )
+
+
+@json_api(blueprint, "/v1/automation/explorer/state")
+def explorer_state_endpoint(data: ExplorerStateRequest) -> ExplorerStateResponse:
+    """Explorer run state - returns not available for self-hosted."""
+    return ExplorerStateResponse(
+        status="not_available", message="Explorer not available in self-hosted mode"
+    )
+
+
+@json_api(blueprint, "/v1/automation/explorer/update")
+def explorer_update_endpoint(data: ExplorerUpdateRequest) -> ExplorerUpdateResponse:
+    """Explorer update - returns not available for self-hosted."""
+    return ExplorerUpdateResponse(
+        status="not_available", message="Explorer updates not available in self-hosted mode"
+    )
 
 
 @blueprint.route("/health/live", methods=["GET"])
