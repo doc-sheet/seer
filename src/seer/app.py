@@ -679,10 +679,10 @@ def explorer_runs_endpoint(data: ExplorerRunsRequest) -> ExplorerRunsResponse:
             category_key=data.category_key,
             category_value=data.category_value,
         )
-        return ExplorerRunsResponse(runs=runs)
+        return ExplorerRunsResponse(data=runs)
     except Exception as e:
         logger.exception(f"Error listing explorer runs: {e}")
-        return ExplorerRunsResponse(runs=[])
+        return ExplorerRunsResponse(data=[])
 
 
 @json_api(blueprint, "/v1/automation/explorer/chat")

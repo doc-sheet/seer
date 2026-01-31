@@ -132,8 +132,9 @@ class ExplorerRunInfo(BaseModel):
     """Summary info about an explorer run."""
 
     run_id: int
+    title: str = "Autofix Run"  # Required by Sentry
     created_at: str
-    updated_at: str
+    last_triggered_at: str  # Required by Sentry (replaces updated_at)
     status: ExplorerStatus
     category_key: str | None = None
     category_value: str | None = None
@@ -142,7 +143,7 @@ class ExplorerRunInfo(BaseModel):
 class ExplorerRunsResponse(BaseModel):
     """Response for listing explorer runs."""
 
-    runs: list[ExplorerRunInfo] = Field(default_factory=list)
+    data: list[ExplorerRunInfo] = Field(default_factory=list)  # Sentry expects "data" key
 
 
 class ExplorerChatRequest(BaseModel):

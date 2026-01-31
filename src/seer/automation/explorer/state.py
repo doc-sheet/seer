@@ -54,6 +54,7 @@ class ExplorerRunState:
         organization_id: int | None = None,
         category_key: str | None = None,
         category_value: str | None = None,
+        group_id: int | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> "ExplorerRunState":
         """Create a new Explorer run."""
@@ -78,10 +79,20 @@ class ExplorerRunState:
 
         initial_state.metadata = state_metadata
 
+        # Derive group_id from category_value if not explicitly provided
+        # When category_key is "autofix", category_value is the issue/group ID
+        effective_group_id = group_id
+        if effective_group_id is None and category_key == "autofix" and category_value:
+            try:
+                effective_group_id = int(category_value)
+            except (ValueError, TypeError):
+                pass
+
         with Session() as session:
             db_state = DbRunState(
                 value=initial_state.model_dump(mode="json"),
                 type=cls.type.value,
+                group_id=effective_group_id,
             )
             session.add(db_state)
             session.flush()
@@ -149,8 +160,9 @@ class ExplorerRunState:
                 runs.append(
                     ExplorerRunInfo(
                         run_id=db_state.id,
+                        title=f"Autofix Run #{db_state.id}",
                         created_at=db_state.created_at.isoformat(),
-                        updated_at=db_state.updated_at.isoformat(),
+                        last_triggered_at=db_state.updated_at.isoformat(),
                         status=state.status,
                         category_key=state.metadata.get("category_key") if state.metadata else None,
                         category_value=(
