@@ -71,6 +71,10 @@ class AppConfig(BaseModel):
     GITLAB_TOKEN: str | None = None
     GITLAB_INSTANCE_URL: str = "https://gitlab.com"  # Override for self-hosted GitLab
 
+    # Anthropic API Configuration (for Explorer)
+    ANTHROPIC_API_KEY: str | None = None
+    EXPLORER_MODEL: str = "claude-sonnet-4-20250514"
+
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = ""

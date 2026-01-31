@@ -118,6 +118,8 @@ from seer.automation.explorer.models import (
     ProjectPreferenceBulkSetRequest,
     ProjectPreferenceBulkSetResponse,
 )
+from seer.automation.explorer.state import ExplorerRunState
+from seer.automation.explorer.tasks import process_explorer_chat
 from seer.automation.preferences import (
     GetSeerProjectPreferenceRequest,
     GetSeerProjectPreferenceResponse,
@@ -662,42 +664,155 @@ def translate_endpoint(data: TranslateRequest) -> TranslateResponses:
 
 
 # =============================================================================
-# Explorer Endpoints (Stub implementation for self-hosted)
+# Explorer Endpoints
 # =============================================================================
-# These endpoints return minimal responses to avoid 404 errors.
-# The full Explorer feature requires Sentry SaaS infrastructure.
+# These endpoints provide LLM-powered chat functionality for issue analysis.
+# Requires ANTHROPIC_API_KEY environment variable to be set.
 
 
 @json_api(blueprint, "/v1/automation/explorer/runs")
 def explorer_runs_endpoint(data: ExplorerRunsRequest) -> ExplorerRunsResponse:
-    """List explorer runs - returns empty list for self-hosted."""
-    return ExplorerRunsResponse(runs=[], message="Explorer runs not available in self-hosted mode")
+    """List explorer runs for an organization."""
+    try:
+        runs = ExplorerRunState.list(
+            organization_id=data.organization_id,
+            category_key=data.category_key,
+            category_value=data.category_value,
+        )
+        return ExplorerRunsResponse(runs=runs)
+    except Exception as e:
+        logger.exception(f"Error listing explorer runs: {e}")
+        return ExplorerRunsResponse(runs=[])
 
 
 @json_api(blueprint, "/v1/automation/explorer/chat")
 def explorer_chat_endpoint(data: ExplorerChatRequest) -> ExplorerChatResponse:
-    """Explorer chat - returns not available for self-hosted."""
-    return ExplorerChatResponse(
-        status="not_available",
-        message="Explorer chat not available in self-hosted mode",
-        run_id=data.run_id,
-    )
+    """Process an explorer chat message."""
+    import os
+
+    app_config = resolve(AppConfig)
+
+    # Check if Anthropic API key is configured
+    if not app_config.ANTHROPIC_API_KEY and not os.environ.get("ANTHROPIC_API_KEY"):
+        return ExplorerChatResponse(
+            status="not_available",
+            message="Explorer requires ANTHROPIC_API_KEY to be configured",
+            run_id=None,
+        )
+
+    try:
+        # Create new run or get existing
+        if data.run_id is None:
+            state = ExplorerRunState.create(
+                organization_id=data.organization_id,
+                category_key=data.category_key,
+                category_value=data.category_value,
+                metadata=data.metadata,
+            )
+            run_id = state.run_id
+        else:
+            state = ExplorerRunState.get(data.run_id)
+            if state is None:
+                return ExplorerChatResponse(
+                    status="error",
+                    message=f"Run {data.run_id} not found",
+                    run_id=None,
+                )
+            run_id = data.run_id
+
+        # Get query from request
+        query = data.get_query()
+        if not query:
+            return ExplorerChatResponse(
+                status="error",
+                message="No query provided",
+                run_id=run_id,
+            )
+
+        # Convert tools to serializable format
+        tools_data = None
+        if data.tools:
+            tools_data = [t.model_dump(mode="json") for t in data.tools]
+
+        # Queue the processing task
+        process_explorer_chat.delay(
+            run_id=run_id,
+            query=query,
+            artifact_key=data.artifact_key,
+            artifact_schema=data.artifact_schema,
+            tools=tools_data,
+            metadata=data.metadata,
+        )
+
+        return ExplorerChatResponse(
+            status="processing",
+            run_id=run_id,
+            message=None,
+        )
+
+    except Exception as e:
+        logger.exception(f"Error processing explorer chat: {e}")
+        sentry_sdk.capture_exception(e)
+        return ExplorerChatResponse(
+            status="error",
+            message=str(e),
+            run_id=data.run_id,
+        )
 
 
 @json_api(blueprint, "/v1/automation/explorer/state")
 def explorer_state_endpoint(data: ExplorerStateRequest) -> ExplorerStateResponse:
-    """Explorer run state - returns not available for self-hosted."""
-    return ExplorerStateResponse(
-        status="not_available", message="Explorer not available in self-hosted mode"
-    )
+    """Get the current state of an explorer run."""
+    try:
+        state = ExplorerRunState.get(data.run_id)
+        if state is None:
+            return ExplorerStateResponse(
+                session=None,
+                status="not_found",
+                message=f"Run {data.run_id} not found",
+            )
+
+        return ExplorerStateResponse(
+            session=state.to_seer_run_state(),
+            status="ok",
+            message=None,
+        )
+
+    except Exception as e:
+        logger.exception(f"Error getting explorer state: {e}")
+        return ExplorerStateResponse(
+            session=None,
+            status="error",
+            message=str(e),
+        )
 
 
 @json_api(blueprint, "/v1/automation/explorer/update")
 def explorer_update_endpoint(data: ExplorerUpdateRequest) -> ExplorerUpdateResponse:
-    """Explorer update - returns not available for self-hosted."""
-    return ExplorerUpdateResponse(
-        status="not_available", message="Explorer updates not available in self-hosted mode"
-    )
+    """Update an explorer run."""
+    try:
+        state = ExplorerRunState.get(data.run_id)
+        if state is None:
+            return ExplorerUpdateResponse(
+                status="error",
+                message=f"Run {data.run_id} not found",
+            )
+
+        # Handle different update types
+        if data.update_type == "cancel":
+            from seer.automation.explorer.models import ExplorerStatus
+
+            state.set_status(ExplorerStatus.COMPLETED)
+            state.set_loading(False)
+
+        return ExplorerUpdateResponse(status="ok", message=None)
+
+    except Exception as e:
+        logger.exception(f"Error updating explorer run: {e}")
+        return ExplorerUpdateResponse(
+            status="error",
+            message=str(e),
+        )
 
 
 # ============================================
