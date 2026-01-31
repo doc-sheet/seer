@@ -111,12 +111,9 @@ class ExplorerAgent:
             The run_id
         """
         try:
-            # Add user message to history
+            # Add user message to history (not loading - user message is complete)
             user_message = Message(role="user", content=query)
             self.state.add_message(user_message)
-
-            # Set loading state
-            self.state.set_loading(True)
 
             # Build messages from history
             messages = self._build_messages()
