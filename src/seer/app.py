@@ -1374,10 +1374,7 @@ def workflows_compare_cohort_endpoint(
 
 
 @json_api(blueprint, "/v0/issues/supergroups")
-@inject
-def supergroups_endpoint(
-    data: SupergroupsRequest, app_config: AppConfig = injected
-) -> SupergroupsResponse:
+def supergroups_endpoint(data: SupergroupsRequest) -> SupergroupsResponse:
     """Embed root cause analysis for issue supergroup clustering.
 
     Receives root cause artifact data from completed autofix runs,
@@ -1387,6 +1384,7 @@ def supergroups_endpoint(
     if not data.group_id or not data.artifact_data:
         return SupergroupsResponse(status="ok")
 
+    app_config = resolve(AppConfig)
     if not app_config.is_grouping_enabled:
         logger.info(
             "supergroups.skipped_grouping_disabled",
