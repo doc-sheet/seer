@@ -218,9 +218,13 @@ class ExplorerUpdateResponse(BaseModel):
 
 
 class CodingAgentStateSetRequest(BaseModel):
-    """Request to set coding agent state."""
+    """Request to set coding agent state.
 
-    run_id: int | None = None
+    Sentry sends: {run_id, coding_agent_states: [CodingAgentState]}
+    """
+
+    run_id: int
+    coding_agent_states: list[dict[str, Any]] = Field(default_factory=list)
 
     class Config:
         extra = "allow"
@@ -229,14 +233,26 @@ class CodingAgentStateSetRequest(BaseModel):
 class CodingAgentStateSetResponse(BaseModel):
     """Response for setting coding agent state."""
 
-    status: Literal["ok", "not_available"] = "not_available"
-    message: str = "Coding agent not available in self-hosted mode"
+    status: Literal["ok", "error"] = "ok"
+    message: str = ""
+
+
+class CodingAgentStateUpdateInner(BaseModel):
+    """Inner update payload for coding agent state update."""
+
+    status: str | None = None
+    agent_url: str | None = None
+    results: list[dict[str, Any]] | None = None
 
 
 class CodingAgentStateUpdateRequest(BaseModel):
-    """Request to update coding agent state."""
+    """Request to update coding agent state.
 
-    run_id: int | None = None
+    Sentry sends: {agent_id, updates: {status, agent_url, results}}
+    """
+
+    agent_id: str
+    updates: CodingAgentStateUpdateInner
 
     class Config:
         extra = "allow"
@@ -245,14 +261,19 @@ class CodingAgentStateUpdateRequest(BaseModel):
 class CodingAgentStateUpdateResponse(BaseModel):
     """Response for updating coding agent state."""
 
-    status: Literal["ok", "not_available"] = "not_available"
-    message: str = "Coding agent not available in self-hosted mode"
+    status: Literal["ok", "error"] = "ok"
+    message: str = ""
 
 
 class AutofixPromptRequest(BaseModel):
-    """Request for autofix prompt."""
+    """Request for autofix prompt.
 
-    run_id: int | None = None
+    Sentry sends: {run_id, include_root_cause, include_solution}
+    """
+
+    run_id: int
+    include_root_cause: bool = False
+    include_solution: bool = False
 
     class Config:
         extra = "allow"
@@ -262,7 +283,7 @@ class AutofixPromptResponse(BaseModel):
     """Response for autofix prompt."""
 
     prompt: str | None = None
-    message: str = "Autofix prompt not available in self-hosted mode"
+    message: str = ""
 
 
 class CodegenPrReviewRerunRequest(BaseModel):
@@ -311,3 +332,144 @@ class ProjectPreferenceBulkSetResponse(BaseModel):
 
     status: Literal["ok", "not_available"] = "ok"
     message: str = "Bulk preferences set"
+
+
+# =============================================================================
+# Stub models for Sentry 26.2.0 endpoints
+# TODO: Implement proper handlers for these endpoints
+# =============================================================================
+
+
+class LlmGenerateRequest(BaseModel):
+    """Request for LLM generation (issue view title generation, etc.)."""
+
+    provider: str = "gemini"
+    model: str = "flash"
+    referrer: str = ""
+    prompt: str = ""
+    system_prompt: str = ""
+    temperature: float = 0.7
+    max_tokens: int = 256
+
+    class Config:
+        extra = "allow"
+
+
+class LlmGenerateResponse(BaseModel):
+    """Response for LLM generation."""
+
+    content: str | None = None
+
+
+class AssistedQueryStartRequest(BaseModel):
+    """Request to start an assisted query search agent."""
+
+    org_id: int | None = None
+    org_slug: str = ""
+    project_ids: list[int] = Field(default_factory=list)
+    natural_language_query: str = ""
+    strategy: str = "Traces"
+    user_email: str | None = None
+    timezone: str | None = None
+    options: dict[str, Any] | None = None
+
+    class Config:
+        extra = "allow"
+
+
+class AssistedQueryStartResponse(BaseModel):
+    """Response for starting an assisted query."""
+
+    run_id: int | None = None
+
+
+class AssistedQueryStateRequest(BaseModel):
+    """Request for assisted query state."""
+
+    run_id: int
+    organization_id: int | None = None
+
+    class Config:
+        extra = "allow"
+
+
+class AssistedQueryStateResponse(BaseModel):
+    """Response for assisted query state."""
+
+    session: dict[str, Any] | None = None
+
+
+class AssistedQueryTranslateAgenticRequest(BaseModel):
+    """Request for agentic query translation."""
+
+    org_id: int | None = None
+    org_slug: str = ""
+    project_ids: list[int] = Field(default_factory=list)
+    natural_language_query: str = ""
+    strategy: str = "Traces"
+    options: dict[str, Any] | None = None
+
+    class Config:
+        extra = "allow"
+
+
+class AssistedQueryTranslateAgenticResponse(BaseModel):
+    """Response for agentic query translation."""
+
+    query: str | None = None
+
+
+class SupergroupsRequest(BaseModel):
+    """Request for supergroups embedding."""
+
+    organization_id: int | None = None
+    group_id: int | None = None
+    artifact_data: dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        extra = "allow"
+
+
+class SupergroupsResponse(BaseModel):
+    """Response for supergroups embedding."""
+
+    status: Literal["ok", "not_available"] = "ok"
+
+
+class AnomalyDetectionAlertDataRequest(BaseModel):
+    """Request for anomaly detection alert data."""
+
+    alert: dict[str, Any] = Field(default_factory=dict)
+    start: float = 0
+    end: float = 0
+
+    class Config:
+        extra = "allow"
+
+
+class AnomalyDetectionAlertDataResponse(BaseModel):
+    """Response for anomaly detection alert data."""
+
+    success: bool = True
+    message: str | None = None
+    data: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class WorkflowsCompareCohortRequest(BaseModel):
+    """Request for workflow cohort comparison."""
+
+    baseline: list[Any] = Field(default_factory=list)
+    outliers: list[Any] = Field(default_factory=list)
+    total_baseline: int = 0
+    total_outliers: int = 0
+    config: dict[str, Any] = Field(default_factory=dict)
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        extra = "allow"
+
+
+class WorkflowsCompareCohortResponse(BaseModel):
+    """Response for workflow cohort comparison."""
+
+    results: list[Any] = Field(default_factory=list)

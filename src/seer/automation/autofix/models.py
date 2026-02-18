@@ -255,6 +255,28 @@ class AutofixFeedback(BaseModel):
     solution_thumbs_down: bool | None = None
 
 
+class ExternalCodingAgentResult(BaseModel):
+    """Result from an external coding agent (Cursor, GitHub Copilot)."""
+
+    description: str
+    repo_provider: str
+    repo_full_name: str
+    branch_name: str | None = None
+    pr_url: str | None = None
+
+
+class ExternalCodingAgentState(BaseModel):
+    """State of an external coding agent stored in the autofix run."""
+
+    id: str
+    status: str = "pending"
+    agent_url: str | None = None
+    provider: str
+    name: str
+    started_at: Any = None  # datetime or ISO string from Sentry
+    results: list[ExternalCodingAgentResult] = Field(default_factory=list)
+
+
 class AutofixGroupState(BaseModel):
     """
     This class maps to the JSON keys inside the "value" column of the run_state table.
@@ -275,6 +297,7 @@ class AutofixGroupState(BaseModel):
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
     feedback: AutofixFeedback | None = None
+    coding_agents: dict[str, ExternalCodingAgentState] = Field(default_factory=dict)
 
 
 class AutofixStateRequest(BaseModel):

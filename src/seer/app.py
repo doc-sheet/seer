@@ -97,6 +97,14 @@ from seer.automation.codegen.tasks import (
     get_unittest_state,
 )
 from seer.automation.explorer.models import (
+    AnomalyDetectionAlertDataRequest,
+    AnomalyDetectionAlertDataResponse,
+    AssistedQueryStartRequest,
+    AssistedQueryStartResponse,
+    AssistedQueryStateRequest,
+    AssistedQueryStateResponse,
+    AssistedQueryTranslateAgenticRequest,
+    AssistedQueryTranslateAgenticResponse,
     AutofixPromptRequest,
     AutofixPromptResponse,
     CodegenPrReviewRerunRequest,
@@ -113,10 +121,16 @@ from seer.automation.explorer.models import (
     ExplorerStateResponse,
     ExplorerUpdateRequest,
     ExplorerUpdateResponse,
+    LlmGenerateRequest,
+    LlmGenerateResponse,
     ProjectPreferenceBulkRequest,
     ProjectPreferenceBulkResponse,
     ProjectPreferenceBulkSetRequest,
     ProjectPreferenceBulkSetResponse,
+    SupergroupsRequest,
+    SupergroupsResponse,
+    WorkflowsCompareCohortRequest,
+    WorkflowsCompareCohortResponse,
 )
 from seer.automation.explorer.state import ExplorerRunState
 from seer.automation.explorer.tasks import process_explorer_chat
@@ -816,7 +830,7 @@ def explorer_update_endpoint(data: ExplorerUpdateRequest) -> ExplorerUpdateRespo
 
 
 # ============================================
-# Additional stub endpoints for Sentry 26.x compatibility
+# Coding agent endpoints (required for Cursor/Copilot integration)
 # ============================================
 
 
@@ -824,28 +838,226 @@ def explorer_update_endpoint(data: ExplorerUpdateRequest) -> ExplorerUpdateRespo
 def coding_agent_state_set_endpoint(
     data: CodingAgentStateSetRequest,
 ) -> CodingAgentStateSetResponse:
-    """Set coding agent state - stub for self-hosted."""
-    return CodingAgentStateSetResponse(
-        status="not_available", message="Coding agent not available in self-hosted mode"
-    )
+    """Store coding agent states in the autofix run.
+
+    Sentry calls this after launching external coding agents (Cursor, GitHub Copilot)
+    to persist their initial state in the autofix run.
+    """
+    from seer.automation.autofix.models import ExternalCodingAgentResult, ExternalCodingAgentState
+    from seer.automation.autofix.state import ContinuationState
+
+    try:
+        state = ContinuationState(data.run_id)
+        with state.update() as cur:
+            for agent_data in data.coding_agent_states:
+                agent_id = agent_data.get("id", "")
+                if not agent_id:
+                    continue
+                results = [ExternalCodingAgentResult(**r) for r in agent_data.get("results", [])]
+                agent_state = ExternalCodingAgentState(
+                    id=agent_id,
+                    status=agent_data.get("status", "pending"),
+                    agent_url=agent_data.get("agent_url"),
+                    provider=agent_data.get("provider", ""),
+                    name=agent_data.get("name", ""),
+                    started_at=agent_data.get("started_at"),
+                    results=results,
+                )
+                cur.coding_agents[agent_id] = agent_state
+
+        logger.info(
+            "coding_agent.state_set",
+            extra={
+                "run_id": data.run_id,
+                "num_agents": len(data.coding_agent_states),
+            },
+        )
+        return CodingAgentStateSetResponse(status="ok")
+    except Exception as e:
+        logger.exception(f"Error setting coding agent state: {e}")
+        return CodingAgentStateSetResponse(status="error", message=str(e))
 
 
 @json_api(blueprint, "/v1/automation/autofix/coding-agent/state/update")
 def coding_agent_state_update_endpoint(
     data: CodingAgentStateUpdateRequest,
 ) -> CodingAgentStateUpdateResponse:
-    """Update coding agent state - stub for self-hosted."""
-    return CodingAgentStateUpdateResponse(
-        status="not_available", message="Coding agent not available in self-hosted mode"
-    )
+    """Update a coding agent's state in its autofix run.
+
+    Sentry calls this from webhook handlers (e.g., Cursor webhook) when an
+    external coding agent reports status changes, completions, or failures.
+    """
+    from seer.automation.autofix.models import ExternalCodingAgentResult
+    from seer.db import DbRunState, Session
+
+    try:
+        # Find the run containing this agent_id by scanning recent runs
+        with Session() as session:
+            # Search recent runs for the agent
+            recent_runs = (
+                session.query(DbRunState)
+                .filter(DbRunState.type == "autofix")
+                .order_by(DbRunState.id.desc())
+                .limit(100)
+                .all()
+            )
+            target_run_id = None
+            for run_state in recent_runs:
+                from seer.automation.autofix.state import ContinuationState
+
+                try:
+                    cs = ContinuationState(run_state.id)
+                    cur = cs.get()
+                    if data.agent_id in cur.coding_agents:
+                        target_run_id = run_state.id
+                        break
+                except Exception:
+                    continue
+
+        if target_run_id is None:
+            logger.warning(
+                "coding_agent.state_update.agent_not_found",
+                extra={"agent_id": data.agent_id},
+            )
+            return CodingAgentStateUpdateResponse(
+                status="error", message=f"Agent {data.agent_id} not found"
+            )
+
+        from seer.automation.autofix.state import ContinuationState
+
+        state = ContinuationState(target_run_id)
+        with state.update() as cur:
+            agent = cur.coding_agents.get(data.agent_id)
+            if agent is None:
+                return CodingAgentStateUpdateResponse(
+                    status="error", message=f"Agent {data.agent_id} not found in run"
+                )
+
+            if data.updates.status is not None:
+                agent.status = data.updates.status
+            if data.updates.agent_url is not None:
+                agent.agent_url = data.updates.agent_url
+            if data.updates.results is not None:
+                agent.results = [ExternalCodingAgentResult(**r) for r in data.updates.results]
+
+        logger.info(
+            "coding_agent.state_updated",
+            extra={
+                "agent_id": data.agent_id,
+                "run_id": target_run_id,
+                "status": data.updates.status,
+            },
+        )
+        return CodingAgentStateUpdateResponse(status="ok")
+    except Exception as e:
+        logger.exception(f"Error updating coding agent state: {e}")
+        return CodingAgentStateUpdateResponse(status="error", message=str(e))
 
 
 @json_api(blueprint, "/v1/automation/autofix/prompt")
 def autofix_prompt_endpoint(data: AutofixPromptRequest) -> AutofixPromptResponse:
-    """Get autofix prompt - stub for self-hosted."""
-    return AutofixPromptResponse(
-        prompt=None, message="Autofix prompt not available in self-hosted mode"
-    )
+    """Build and return the autofix prompt from the run's state.
+
+    Sentry calls this to get the prompt text for external coding agents.
+    The prompt includes the issue context, root cause analysis (if selected),
+    and solution plan (if selected).
+    """
+    from seer.automation.autofix.state import ContinuationState
+
+    try:
+        state = ContinuationState(data.run_id)
+        cur = state.get()
+
+        parts: list[str] = []
+
+        # Issue context from the request
+        issue = cur.request.issue
+        parts.append(f"Issue: {issue.title}")
+
+        if hasattr(issue, "events") and issue.events:
+            event = issue.events[0]
+            # Extract exception info if available
+            for entry in event.get("entries", []):
+                if entry.get("type") == "exception":
+                    for exc in entry.get("data", {}).get("values", []):
+                        exc_type = exc.get("type", "")
+                        exc_value = exc.get("value", "")
+                        if exc_type or exc_value:
+                            parts.append(f"\nException: {exc_type}: {exc_value}")
+                        stacktrace = exc.get("stacktrace")
+                        if stacktrace and stacktrace.get("frames"):
+                            frames = stacktrace["frames"]
+                            # Show last 5 in-app frames
+                            in_app = [f for f in frames if f.get("in_app", False)]
+                            relevant = in_app[-5:] if in_app else frames[-5:]
+                            trace_lines = []
+                            for frame in relevant:
+                                filename = frame.get("filename", "?")
+                                lineno = frame.get("lineNo") or frame.get("lineno", "?")
+                                func = frame.get("function", "?")
+                                trace_lines.append(f"  {filename}:{lineno} in {func}")
+                            if trace_lines:
+                                parts.append("Stacktrace (most relevant):")
+                                parts.extend(trace_lines)
+
+        # Root cause
+        if data.include_root_cause:
+            root_cause, instruction = cur.get_selected_root_cause()
+            if root_cause is not None:
+                parts.append("\n--- Root Cause Analysis ---")
+                if isinstance(root_cause, str):
+                    parts.append(root_cause)
+                else:
+                    if root_cause.description:
+                        parts.append(root_cause.description)
+                    if root_cause.root_cause_reproduction:
+                        for i, timeline_event in enumerate(root_cause.root_cause_reproduction):
+                            parts.append(f"\nStep {i + 1}: {timeline_event.title}")
+                            if timeline_event.code_snippet_and_analysis:
+                                parts.append(timeline_event.code_snippet_and_analysis)
+                            code_file = getattr(timeline_event, "relevant_code_file", None)
+                            if (
+                                code_file
+                                and hasattr(code_file, "file_path")
+                                and code_file.file_path
+                            ):
+                                parts.append(f"File: {code_file.file_path}")
+                if instruction:
+                    parts.append(f"\nAdditional instruction: {instruction}")
+
+        # Solution
+        if data.include_solution:
+            solution, mode = cur.get_selected_solution()
+            if solution is not None:
+                parts.append("\n--- Solution Plan ---")
+                if isinstance(solution, str):
+                    parts.append(solution)
+                else:
+                    for i, step in enumerate(solution):
+                        if step.is_active:
+                            parts.append(f"\nStep {i + 1}: {step.title}")
+                            if step.code_snippet_and_analysis:
+                                parts.append(step.code_snippet_and_analysis)
+
+        # Repo context
+        if cur.request.repos:
+            parts.append("\n--- Repositories ---")
+            for repo in cur.request.repos:
+                repo_name = (
+                    f"{repo.owner}/{repo.name}" if hasattr(repo, "owner") else repo.full_name
+                )
+                parts.append(f"- {repo_name}")
+
+        prompt_text = "\n".join(parts)
+        return AutofixPromptResponse(prompt=prompt_text)
+    except Exception as e:
+        logger.exception(f"Error building autofix prompt: {e}")
+        return AutofixPromptResponse(prompt=None, message=str(e))
+
+
+# ============================================
+# Additional stub endpoints for Sentry 26.x compatibility
+# ============================================
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review/rerun")
@@ -872,6 +1084,91 @@ def set_project_preference_bulk_endpoint(
 ) -> ProjectPreferenceBulkSetResponse:
     """Set bulk project preferences - stub for self-hosted."""
     return ProjectPreferenceBulkSetResponse(status="ok", message="Bulk preferences set")
+
+
+# ============================================
+# New stub endpoints for Sentry 26.2.0 compatibility
+# TODO: Implement proper handlers for these endpoints
+# ============================================
+
+
+@json_api(blueprint, "/v1/llm/generate")
+def llm_generate_endpoint(data: LlmGenerateRequest) -> LlmGenerateResponse:
+    """LLM text generation - stub for self-hosted.
+
+    TODO: Implement using OpenAI/Anthropic API for issue view title generation, etc.
+    """
+    logger.info(
+        "llm_generate.stub",
+        extra={"referrer": data.referrer, "model": data.model},
+    )
+    return LlmGenerateResponse(content=None)
+
+
+@json_api(blueprint, "/v1/assisted-query/start")
+def assisted_query_start_endpoint(
+    data: AssistedQueryStartRequest,
+) -> AssistedQueryStartResponse:
+    """Start async search agent - stub for self-hosted.
+
+    TODO: Implement agentic search query translation.
+    """
+    logger.info("assisted_query.start.stub", extra={"strategy": data.strategy})
+    return AssistedQueryStartResponse(run_id=None)
+
+
+@json_api(blueprint, "/v1/assisted-query/state")
+def assisted_query_state_endpoint(
+    data: AssistedQueryStateRequest,
+) -> AssistedQueryStateResponse:
+    """Get search agent state - stub for self-hosted.
+
+    TODO: Implement state tracking for assisted query runs.
+    """
+    return AssistedQueryStateResponse(session=None)
+
+
+@json_api(blueprint, "/v1/assisted-query/translate-agentic")
+def assisted_query_translate_agentic_endpoint(
+    data: AssistedQueryTranslateAgenticRequest,
+) -> AssistedQueryTranslateAgenticResponse:
+    """Agentic query translation - stub for self-hosted.
+
+    TODO: Implement NL-to-query translation using LLM.
+    """
+    logger.info("assisted_query.translate_agentic.stub", extra={"strategy": data.strategy})
+    return AssistedQueryTranslateAgenticResponse(query=None)
+
+
+@json_api(blueprint, "/v0/issues/supergroups")
+def supergroups_endpoint(data: SupergroupsRequest) -> SupergroupsResponse:
+    """Supergroups embedding - stub for self-hosted.
+
+    TODO: Implement issue embedding for supergroup clustering.
+    """
+    return SupergroupsResponse(status="ok")
+
+
+@json_api(blueprint, "/v1/anomaly-detection/alert-data")
+def anomaly_detection_alert_data_endpoint(
+    data: AnomalyDetectionAlertDataRequest,
+) -> AnomalyDetectionAlertDataResponse:
+    """Get anomaly detection alert threshold data - stub for self-hosted.
+
+    TODO: Implement anomaly detection data retrieval.
+    """
+    return AnomalyDetectionAlertDataResponse(success=True, data=[])
+
+
+@json_api(blueprint, "/v1/workflows/compare/cohort")
+def workflows_compare_cohort_endpoint(
+    data: WorkflowsCompareCohortRequest,
+) -> WorkflowsCompareCohortResponse:
+    """Compare cohort distributions - stub for self-hosted.
+
+    TODO: Implement statistical comparison of cohort distributions.
+    """
+    return WorkflowsCompareCohortResponse(results=[])
 
 
 @blueprint.route("/health/live", methods=["GET"])
