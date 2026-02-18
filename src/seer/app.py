@@ -10,6 +10,7 @@ from flask import Blueprint, Flask, jsonify
 from openai import APITimeoutError
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sqlalchemy.dialects.postgresql import insert
 from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
 from integrations.codecov.codecov_auth import CodecovAuthentication
@@ -154,6 +155,7 @@ from seer.automation.summarize.traces import summarize_trace
 from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
+from seer.db import DbGroupingRecord, Session
 from seer.dependency_injection import inject, injected, resolve
 from seer.exceptions import ClientError, ServerError
 from seer.grouping.grouping import (
@@ -1367,19 +1369,86 @@ def workflows_compare_cohort_endpoint(
 
 
 @json_api(blueprint, "/v0/issues/supergroups")
-def supergroups_endpoint(data: SupergroupsRequest) -> SupergroupsResponse:
-    """Supergroups embedding for issue clustering.
+@inject
+def supergroups_endpoint(
+    data: SupergroupsRequest, app_config: AppConfig = injected
+) -> SupergroupsResponse:
+    """Embed root cause analysis for issue supergroup clustering.
 
-    TODO: Implement with embedding infrastructure.
-    Currently accepts and acknowledges the request without processing.
+    Receives root cause artifact data from completed autofix runs,
+    encodes it using the grouping model, and stores the embedding
+    for future similarity queries across issues.
     """
-    logger.info(
-        "supergroups.acknowledged",
-        extra={
-            "organization_id": data.organization_id,
-            "group_id": data.group_id,
-        },
-    )
+    if not data.group_id or not data.artifact_data:
+        return SupergroupsResponse(status="ok")
+
+    if not app_config.is_grouping_enabled:
+        logger.info(
+            "supergroups.skipped_grouping_disabled",
+            extra={"group_id": data.group_id},
+        )
+        return SupergroupsResponse(status="ok")
+
+    # Extract text from root cause artifact data
+    text_parts = []
+    if data.artifact_data.get("description"):
+        text_parts.append(data.artifact_data["description"])
+    for event in data.artifact_data.get("root_cause_reproduction", []):
+        if isinstance(event, dict):
+            if event.get("title"):
+                text_parts.append(event["title"])
+            if event.get("code_snippet_and_analysis"):
+                text_parts.append(event["code_snippet_and_analysis"])
+
+    if not text_parts:
+        logger.info(
+            "supergroups.no_text_to_embed",
+            extra={"group_id": data.group_id},
+        )
+        return SupergroupsResponse(status="ok")
+
+    root_cause_text = "\n".join(text_parts)
+
+    try:
+        embedding = grouping_lookup().encode_text(root_cause_text).astype("float32")
+
+        # Store using org_id as project_id partition and prefixed hash
+        # to separate from normal stacktrace embeddings
+        org_id = data.organization_id or 0
+        group_hash = f"sg_{data.group_id}"[:32]
+
+        with Session() as session:
+            insert_stmt = insert(DbGroupingRecord).values(
+                project_id=org_id,
+                stacktrace_embedding=embedding,
+                hash=group_hash,
+                error_type="supergroup_root_cause",
+            )
+            session.execute(
+                insert_stmt.on_conflict_do_update(
+                    index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash),
+                    set_={"stacktrace_embedding": embedding},
+                )
+            )
+            session.commit()
+
+        logger.info(
+            "supergroups.embedding_stored",
+            extra={
+                "organization_id": data.organization_id,
+                "group_id": data.group_id,
+                "text_length": len(root_cause_text),
+            },
+        )
+    except Exception as e:
+        logger.exception(
+            f"supergroups.embedding_failed: {e}",
+            extra={
+                "organization_id": data.organization_id,
+                "group_id": data.group_id,
+            },
+        )
+
     return SupergroupsResponse(status="ok")
 
 
