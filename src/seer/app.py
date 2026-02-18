@@ -890,12 +890,12 @@ def coding_agent_state_update_endpoint(
     external coding agent reports status changes, completions, or failures.
     """
     from seer.automation.autofix.models import ExternalCodingAgentResult
-    from seer.db import DbRunState, Session
+    from seer.automation.autofix.state import ContinuationState
+    from seer.db import DbRunState
 
     try:
         # Find the run containing this agent_id by scanning recent runs
         with Session() as session:
-            # Search recent runs for the agent
             recent_runs = (
                 session.query(DbRunState)
                 .filter(DbRunState.type == "autofix")
@@ -905,8 +905,6 @@ def coding_agent_state_update_endpoint(
             )
             target_run_id = None
             for run_state in recent_runs:
-                from seer.automation.autofix.state import ContinuationState
-
                 try:
                     cs = ContinuationState(run_state.id)
                     cur = cs.get()
@@ -924,8 +922,6 @@ def coding_agent_state_update_endpoint(
             return CodingAgentStateUpdateResponse(
                 status="error", message=f"Agent {data.agent_id} not found"
             )
-
-        from seer.automation.autofix.state import ContinuationState
 
         state = ContinuationState(target_run_id)
         with state.update() as cur:
@@ -1140,14 +1136,13 @@ def assisted_query_translate_agentic_endpoint(
 
     Uses the existing assisted_query translate_query infrastructure.
     """
-    from seer.automation.assisted_query.assisted_query import translate_query as do_translate
     from seer.automation.assisted_query.models import TranslateRequest
 
     try:
         if not data.natural_language_query:
             return AssistedQueryTranslateAgenticResponse(query=None)
 
-        result = do_translate(
+        result = translate_query(
             TranslateRequest(
                 org_id=data.org_id or 0,
                 project_ids=data.project_ids,
@@ -1271,22 +1266,32 @@ def anomaly_detection_alert_data_endpoint(
                 success=True, message="Alert not found", data=[]
             )
 
-        # TimeSeries has timestamps/values as numpy arrays + prophet_predictions
+        # Build timestamp→prediction index from prophet predictions
+        # Prophet predictions have their own timestamps array, separate from timeseries
+        predictions = alert.prophet_predictions
+        pred_map: dict[float, int] = {}
+        if predictions is not None:
+            for i in range(len(predictions.timestamps)):
+                pred_map[float(predictions.timestamps[i])] = i
+
         ts = alert.timeseries
         result_data = []
+        ext_alert_id = alert.external_alert_id or 0
 
         for i in range(len(ts.timestamps)):
             timestamp = float(ts.timestamps[i])
             if data.start <= timestamp <= data.end:
-                point = {
+                point: dict = {
+                    "external_alert_id": ext_alert_id,
                     "timestamp": timestamp,
                     "value": float(ts.values[i]),
+                    "yhat_lower": 0.0,
+                    "yhat_upper": 0.0,
                 }
-                # Include prediction bounds from prophet if available
-                predictions = ts.prophet_predictions or alert.prophet_predictions
-                if predictions and i < len(predictions.yhat_upper):
-                    point["yhat_upper"] = float(predictions.yhat_upper[i])
-                    point["yhat_lower"] = float(predictions.yhat_lower[i])
+                pred_idx = pred_map.get(timestamp)
+                if pred_idx is not None:
+                    point["yhat_upper"] = float(predictions.yhat_upper[pred_idx])
+                    point["yhat_lower"] = float(predictions.yhat_lower[pred_idx])
                 result_data.append(point)
 
         return AnomalyDetectionAlertDataResponse(success=True, data=result_data)
@@ -1307,12 +1312,10 @@ def workflows_compare_cohort_endpoint(
         AttributeDistributions,
         CompareCohortsConfig,
         CompareCohortsMeta,
-        CompareCohortsRequest,
         StatsAttribute,
         StatsAttributeBucket,
         StatsCohort,
     )
-    from seer.workflows.compare.service import compare_cohort
 
     try:
         # Build the proper request model from the raw data
