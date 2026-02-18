@@ -727,8 +727,8 @@ def explorer_chat_endpoint(data: ExplorerChatRequest) -> ExplorerChatResponse:
             )
             run_id = state.run_id
         else:
-            state = ExplorerRunState.get(data.run_id)
-            if state is None:
+            existing_state = ExplorerRunState.get(data.run_id)
+            if existing_state is None:
                 return ExplorerChatResponse(
                     status="error",
                     message=f"Run {data.run_id} not found",
@@ -1193,9 +1193,11 @@ def assisted_query_start_endpoint(
         process_explorer_chat.delay(
             run_id=state.run_id,
             query=data.natural_language_query,
-            organization_id=data.org_id,
-            category_key="assisted-query",
-            category_value=data.strategy,
+            metadata={
+                "organization_id": data.org_id,
+                "category_key": "assisted-query",
+                "category_value": data.strategy,
+            },
         )
 
         logger.info(
