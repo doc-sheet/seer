@@ -1087,88 +1087,300 @@ def set_project_preference_bulk_endpoint(
 
 
 # ============================================
-# New stub endpoints for Sentry 26.2.0 compatibility
-# TODO: Implement proper handlers for these endpoints
+# Sentry 26.2.0 endpoints — implemented using existing Seer infrastructure
 # ============================================
 
 
 @json_api(blueprint, "/v1/llm/generate")
 def llm_generate_endpoint(data: LlmGenerateRequest) -> LlmGenerateResponse:
-    """LLM text generation - stub for self-hosted.
+    """LLM text generation for issue view titles and similar features.
 
-    TODO: Implement using OpenAI/Anthropic API for issue view title generation, etc.
+    Uses OpenAI via the existing LlmClient infrastructure. Sentry sends
+    provider="gemini" but we route to OpenAI for self-hosted.
     """
-    logger.info(
-        "llm_generate.stub",
-        extra={"referrer": data.referrer, "model": data.model},
-    )
-    return LlmGenerateResponse(content=None)
+    from seer.automation.agent.client import LlmClient, OpenAiProvider
 
+    try:
+        # Map Sentry's model names to OpenAI models
+        # Sentry sends "flash" (Gemini Flash) — we use gpt-4o-mini as equivalent
+        model_mapping = {
+            "flash": "gpt-4o-mini",
+            "pro": "gpt-4o",
+        }
+        model_name = model_mapping.get(data.model, "gpt-4o-mini")
+        model = OpenAiProvider.model(model_name)
 
-@json_api(blueprint, "/v1/assisted-query/start")
-def assisted_query_start_endpoint(
-    data: AssistedQueryStartRequest,
-) -> AssistedQueryStartResponse:
-    """Start async search agent - stub for self-hosted.
+        llm_client = LlmClient()
+        response = llm_client.generate_text(
+            prompt=data.prompt,
+            model=model,
+            system_prompt=data.system_prompt or None,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+        )
 
-    TODO: Implement agentic search query translation.
-    """
-    logger.info("assisted_query.start.stub", extra={"strategy": data.strategy})
-    return AssistedQueryStartResponse(run_id=None)
-
-
-@json_api(blueprint, "/v1/assisted-query/state")
-def assisted_query_state_endpoint(
-    data: AssistedQueryStateRequest,
-) -> AssistedQueryStateResponse:
-    """Get search agent state - stub for self-hosted.
-
-    TODO: Implement state tracking for assisted query runs.
-    """
-    return AssistedQueryStateResponse(session=None)
+        content = response.message.content if response.message else None
+        logger.info(
+            "llm_generate.success",
+            extra={"referrer": data.referrer, "model": model_name},
+        )
+        return LlmGenerateResponse(content=content)
+    except Exception as e:
+        logger.exception(f"Error in LLM generate: {e}")
+        return LlmGenerateResponse(content=None)
 
 
 @json_api(blueprint, "/v1/assisted-query/translate-agentic")
 def assisted_query_translate_agentic_endpoint(
     data: AssistedQueryTranslateAgenticRequest,
 ) -> AssistedQueryTranslateAgenticResponse:
-    """Agentic query translation - stub for self-hosted.
+    """Translate natural language query to Sentry query syntax using LLM.
 
-    TODO: Implement NL-to-query translation using LLM.
+    Uses the existing assisted_query translate_query infrastructure.
     """
-    logger.info("assisted_query.translate_agentic.stub", extra={"strategy": data.strategy})
-    return AssistedQueryTranslateAgenticResponse(query=None)
+    from seer.automation.assisted_query.assisted_query import translate_query as do_translate
+    from seer.automation.assisted_query.models import TranslateRequest
+
+    try:
+        if not data.natural_language_query:
+            return AssistedQueryTranslateAgenticResponse(query=None)
+
+        result = do_translate(
+            TranslateRequest(
+                org_id=data.org_id or 0,
+                project_ids=data.project_ids,
+                natural_language_query=data.natural_language_query,
+            )
+        )
+
+        if result.responses:
+            first = result.responses[0]
+            logger.info(
+                "assisted_query.translate_agentic.success",
+                extra={"query": first.query, "strategy": data.strategy},
+            )
+            return AssistedQueryTranslateAgenticResponse(query=first.query)
+
+        return AssistedQueryTranslateAgenticResponse(query=None)
+    except Exception as e:
+        logger.exception(f"Error in agentic query translation: {e}")
+        return AssistedQueryTranslateAgenticResponse(query=None)
 
 
-@json_api(blueprint, "/v0/issues/supergroups")
-def supergroups_endpoint(data: SupergroupsRequest) -> SupergroupsResponse:
-    """Supergroups embedding - stub for self-hosted.
+@json_api(blueprint, "/v1/assisted-query/start")
+def assisted_query_start_endpoint(
+    data: AssistedQueryStartRequest,
+) -> AssistedQueryStartResponse:
+    """Start an async assisted query run.
 
-    TODO: Implement issue embedding for supergroup clustering.
+    Creates a run state and queues translation via the Explorer run infrastructure.
+    Returns a run_id for subsequent state polling.
     """
-    return SupergroupsResponse(status="ok")
+    try:
+        if not data.natural_language_query:
+            return AssistedQueryStartResponse(run_id=None)
+
+        state = ExplorerRunState.create(
+            organization_id=data.org_id,
+            category_key="assisted-query",
+            category_value=data.strategy,
+            metadata={
+                "natural_language_query": data.natural_language_query,
+                "project_ids": data.project_ids,
+                "org_slug": data.org_slug,
+                "strategy": data.strategy,
+            },
+        )
+
+        # Queue async processing using the explorer chat task infrastructure
+        process_explorer_chat.delay(
+            run_id=state.run_id,
+            query=data.natural_language_query,
+            organization_id=data.org_id,
+            category_key="assisted-query",
+            category_value=data.strategy,
+        )
+
+        logger.info(
+            "assisted_query.start.success",
+            extra={"run_id": state.run_id, "strategy": data.strategy},
+        )
+        return AssistedQueryStartResponse(run_id=state.run_id)
+    except Exception as e:
+        logger.exception(f"Error starting assisted query: {e}")
+        return AssistedQueryStartResponse(run_id=None)
+
+
+@json_api(blueprint, "/v1/assisted-query/state")
+def assisted_query_state_endpoint(
+    data: AssistedQueryStateRequest,
+) -> AssistedQueryStateResponse:
+    """Get the current state of an assisted query run.
+
+    Loads state from DB using the Explorer run state infrastructure.
+    """
+    try:
+        run_state = ExplorerRunState.get(data.run_id)
+        if run_state is None:
+            return AssistedQueryStateResponse(session=None)
+
+        cur = run_state.get_state()
+        session_data = cur.model_dump(mode="json")
+        return AssistedQueryStateResponse(session=session_data)
+    except Exception as e:
+        logger.warning(
+            "assisted_query.state.error",
+            extra={"run_id": data.run_id, "error": str(e)},
+        )
+        return AssistedQueryStateResponse(session=None)
 
 
 @json_api(blueprint, "/v1/anomaly-detection/alert-data")
 def anomaly_detection_alert_data_endpoint(
     data: AnomalyDetectionAlertDataRequest,
 ) -> AnomalyDetectionAlertDataResponse:
-    """Get anomaly detection alert threshold data - stub for self-hosted.
+    """Get anomaly detection alert threshold data.
 
-    TODO: Implement anomaly detection data retrieval.
+    Queries the existing anomaly detection DB for time series data
+    and prediction bounds for a given alert in a time window.
     """
-    return AnomalyDetectionAlertDataResponse(success=True, data=[])
+    from seer.anomaly_detection.accessors import DbAlertDataAccessor
+
+    try:
+        alert_info = data.alert
+        alert_id = alert_info.get("id")
+        source_id = alert_info.get("source_id")
+        source_type = alert_info.get("source_type")
+
+        if alert_id is None and source_id is None:
+            return AnomalyDetectionAlertDataResponse(
+                success=False, message="Either alert id or source_id required", data=[]
+            )
+
+        accessor = DbAlertDataAccessor()
+        alert = accessor.query(
+            external_alert_id=alert_id,
+            external_alert_source_id=source_id,
+            external_alert_source_type=source_type,
+        )
+
+        if alert is None:
+            return AnomalyDetectionAlertDataResponse(
+                success=True, message="Alert not found", data=[]
+            )
+
+        # TimeSeries has timestamps/values as numpy arrays + prophet_predictions
+        ts = alert.timeseries
+        result_data = []
+
+        for i in range(len(ts.timestamps)):
+            timestamp = float(ts.timestamps[i])
+            if data.start <= timestamp <= data.end:
+                point = {
+                    "timestamp": timestamp,
+                    "value": float(ts.values[i]),
+                }
+                # Include prediction bounds from prophet if available
+                predictions = ts.prophet_predictions or alert.prophet_predictions
+                if predictions and i < len(predictions.yhat_upper):
+                    point["yhat_upper"] = float(predictions.yhat_upper[i])
+                    point["yhat_lower"] = float(predictions.yhat_lower[i])
+                result_data.append(point)
+
+        return AnomalyDetectionAlertDataResponse(success=True, data=result_data)
+    except Exception as e:
+        logger.exception(f"Error getting anomaly detection alert data: {e}")
+        return AnomalyDetectionAlertDataResponse(success=False, message=str(e), data=[])
 
 
 @json_api(blueprint, "/v1/workflows/compare/cohort")
 def workflows_compare_cohort_endpoint(
     data: WorkflowsCompareCohortRequest,
 ) -> WorkflowsCompareCohortResponse:
-    """Compare cohort distributions - stub for self-hosted.
+    """Compare cohort distributions and rank attributes by suspiciousness.
 
-    TODO: Implement statistical comparison of cohort distributions.
+    Uses the existing CompareService with KL divergence and entropy metrics.
     """
-    return WorkflowsCompareCohortResponse(results=[])
+    from seer.workflows.compare.models import (
+        AttributeDistributions,
+        CompareCohortsConfig,
+        CompareCohortsMeta,
+        CompareCohortsRequest,
+        StatsAttribute,
+        StatsAttributeBucket,
+        StatsCohort,
+    )
+    from seer.workflows.compare.service import compare_cohort
+
+    try:
+        # Build the proper request model from the raw data
+        # Sentry sends: baseline, outliers (lists), total_baseline, total_outliers, config, meta
+        baseline_attrs = []
+        for item in data.baseline:
+            if isinstance(item, dict) and "attributeName" in item:
+                buckets = [
+                    StatsAttributeBucket(
+                        attributeValue=b.get("attributeValue", ""),
+                        attributeValueCount=b.get("attributeValueCount", 0),
+                    )
+                    for b in item.get("buckets", [])
+                ]
+                baseline_attrs.append(
+                    StatsAttribute(attributeName=item["attributeName"], buckets=buckets)
+                )
+
+        outlier_attrs = []
+        for item in data.outliers:
+            if isinstance(item, dict) and "attributeName" in item:
+                buckets = [
+                    StatsAttributeBucket(
+                        attributeValue=b.get("attributeValue", ""),
+                        attributeValueCount=b.get("attributeValueCount", 0),
+                    )
+                    for b in item.get("buckets", [])
+                ]
+                outlier_attrs.append(
+                    StatsAttribute(attributeName=item["attributeName"], buckets=buckets)
+                )
+
+        config_data = data.config or {}
+        meta_data = data.meta or {}
+
+        request = CompareCohortsRequest(
+            baseline=StatsCohort(
+                totalCount=data.total_baseline,
+                attributeDistributions=AttributeDistributions(attributes=baseline_attrs),
+            ),
+            selection=StatsCohort(
+                totalCount=data.total_outliers,
+                attributeDistributions=AttributeDistributions(attributes=outlier_attrs),
+            ),
+            config=CompareCohortsConfig(**{k: v for k, v in config_data.items() if v is not None}),
+            meta=CompareCohortsMeta(referrer=meta_data.get("referrer", "unknown")),
+        )
+
+        result = compare_cohort(request)
+        return WorkflowsCompareCohortResponse(results=result.results)
+    except Exception as e:
+        logger.exception(f"Error in cohort comparison: {e}")
+        return WorkflowsCompareCohortResponse(results=[])
+
+
+@json_api(blueprint, "/v0/issues/supergroups")
+def supergroups_endpoint(data: SupergroupsRequest) -> SupergroupsResponse:
+    """Supergroups embedding for issue clustering.
+
+    TODO: Implement with embedding infrastructure.
+    Currently accepts and acknowledges the request without processing.
+    """
+    logger.info(
+        "supergroups.acknowledged",
+        extra={
+            "organization_id": data.organization_id,
+            "group_id": data.group_id,
+        },
+    )
+    return SupergroupsResponse(status="ok")
 
 
 @blueprint.route("/health/live", methods=["GET"])
