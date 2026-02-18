@@ -1471,16 +1471,29 @@ class FileChange(BaseModel):
         return file_contents.replace(self.reference_snippet, "")
 
 
+class SeerAutomationHandoffConfiguration(BaseModel):
+    handoff_point: str  # e.g. "root_cause"
+    target: str  # e.g. "cursor_background_agent"
+    integration_id: int
+    auto_create_pr: bool = False
+
+
 class SeerProjectPreference(BaseModel):
     organization_id: int
     project_id: int
     repositories: list[RepoDefinition]
+    automated_run_stopping_point: str | None = None
+    automation_handoff: SeerAutomationHandoffConfiguration | None = None
 
     def to_db_model(self) -> DbSeerProjectPreference:
         return DbSeerProjectPreference(
             organization_id=self.organization_id,
             project_id=self.project_id,
             repositories=[repo.model_dump() for repo in self.repositories],
+            automated_run_stopping_point=self.automated_run_stopping_point,
+            automation_handoff=(
+                self.automation_handoff.model_dump() if self.automation_handoff else None
+            ),
         )
 
     @classmethod
@@ -1489,6 +1502,8 @@ class SeerProjectPreference(BaseModel):
             organization_id=db_model.organization_id,
             project_id=db_model.project_id,
             repositories=db_model.repositories,
+            automated_run_stopping_point=db_model.automated_run_stopping_point,
+            automation_handoff=db_model.automation_handoff,
         )
 
 
