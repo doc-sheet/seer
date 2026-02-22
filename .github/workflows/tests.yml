@@ -31,23 +31,25 @@ jobs:
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3
 
       - id: "auth"
-        uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 # v1
+        uses: google-github-actions/auth@v2
+        continue-on-error: true
         with:
-          workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
-          service_account: "gha-seer-models@sac-prod-sa.iam.gserviceaccount.com"
-          token_format: "id_token"
-          id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
-          id_token_include_email: true
-          create_credentials_file: true
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Compute requirements hash
+        id: req-hash
+        run: echo "hash=$(sha256sum requirements.txt | cut -c1-8)" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         run: |
           make .env
+          # Use requirements hash in cache key to invalidate when deps change
+          CACHE_KEY="ghcr.io/${{ github.repository_owner }}/seer:cache-${{ steps.req-hash.outputs.hash }}"
           docker buildx bake --file docker-compose.yml --file docker-compose-cache.json \
-            --set *.cache-to=type=registry,ref=ghcr.io/getsentry/seer:cache,mode=max \
-            --set *.cache-from=type=registry,ref=ghcr.io/getsentry/seer:cache \
+            --set *.cache-to=type=registry,ref=${CACHE_KEY},mode=max \
+            --set *.cache-from=type=registry,ref=${CACHE_KEY} \
             --set *.output=type=registry \
-            --set *.tags=ghcr.io/getsentry/seer:cache-${{ github.sha }}
+            --set *.tags=ghcr.io/${{ github.repository_owner }}/seer:cache-${{ github.sha }}
 
   typecheck:
     needs: [build_and_push]
@@ -70,7 +72,7 @@ jobs:
 
       - name: Pull pre-built Docker image
         run: |
-          docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
+          docker pull ghcr.io/${{ github.repository_owner }}/seer:${IMAGE_TAG}
           cp docker-compose.ci.yml docker-compose.override.yml
 
       - name: Create blank .env
@@ -105,21 +107,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: "auth"
-        uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 # v1
+        uses: google-github-actions/auth@v2
+        continue-on-error: true
         with:
-          workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
-          service_account: "gha-seer-models@sac-prod-sa.iam.gserviceaccount.com"
-          token_format: "id_token"
-          id_token_audience: "610575311308-9bsjtgqg4jm01mt058rncpopujgk3627.apps.googleusercontent.com"
-          id_token_include_email: true
-          create_credentials_file: true
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@e30db14379863a8c79331b04a9969f4c1e225e0b # v1
 
       - name: Pull pre-built Docker image
         run: |
-          docker pull ghcr.io/getsentry/seer:${IMAGE_TAG}
+          docker pull ghcr.io/${{ github.repository_owner }}/seer:${IMAGE_TAG}
           cp docker-compose.ci.yml docker-compose.override.yml
 
       - name: Create blank .env
@@ -138,16 +136,22 @@ jobs:
 
       - name: Fetch models
         if: github.event_name == 'push'
+        continue-on-error: true
         run: |
           rm -rf ./models
-          gcloud storage cp -r gs://sentry-ml/seer/models ./
+          gcloud storage cp -r gs://sentry-ml/seer/models ./ || {
+            echo "Models not accessible, using NO_REAL_MODELS mode"
+            mkdir -p models
+            echo "# Placeholder" > models/.keep
+          }
 
       - name: Set test environment flags
         run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          # Check if models directory has real models (not just placeholder)
+          if [[ -d "./models" && $(find ./models -type f ! -name '.keep' ! -name '.gitignore' | head -1) ]]; then
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1 -e GITHUB_TOKEN=${{ secrets.GH_PAT }}" >> $GITHUB_ENV
           else
-            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1 -e GITHUB_TOKEN=${{ secrets.GH_PAT }}" >> $GITHUB_ENV
           fi
 
       - name: Test with pytest

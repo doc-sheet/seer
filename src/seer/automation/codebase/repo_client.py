@@ -8,7 +8,6 @@ import textwrap
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from enum import Enum
 from typing import Any, Dict, List, Literal
 
 import requests
@@ -23,19 +22,35 @@ from github import (
     UnknownObjectException,
 )
 from github.GithubRetry import GithubRetry
-from github.GitRef import GitRef
 from github.GitTree import GitTree
 from github.GitTreeElement import GitTreeElement
-from github.PullRequest import PullRequest
 from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
+from seer.automation.codebase.base_repo_client import (
+    BaseRepoClient,
+    BranchRefResult,
+    PullRequestResult,
+    RepoClientType,
+)
 from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.utils import get_all_supported_extensions
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.automation.utils import AgentError, decode_raw_data
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
+
+# Re-export for backward compatibility
+__all__ = [
+    "RepoClientType",
+    "BranchRefResult",
+    "PullRequestResult",
+    "BaseRepoClient",
+    "GitHubRepoClient",
+    "RepoClient",
+    "get_repo_client",
+    "autocorrect_repo_name",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -129,14 +144,6 @@ def get_codecov_pr_review_app_credentials(
     return app_id, private_key
 
 
-class RepoClientType(str, Enum):
-    READ = "read"
-    WRITE = "write"
-    CODECOV_UNIT_TEST = "codecov_unit_test"
-    CODECOV_PR_REVIEW = "codecov_pr_review"
-    CODECOV_PR_CLOSED = "codecov_pr_closed"
-
-
 class GitTreeElementWithPath:
     """
     A minimal wrapper around GitTreeElement that provides a custom path
@@ -192,8 +199,12 @@ class CompleteGitTree:
         self.tree.extend(items)
 
 
-class RepoClient:
-    # TODO: Support other git providers later
+class GitHubRepoClient:
+    """
+    GitHub-specific implementation of the repository client.
+    Provides access to GitHub repositories via the GitHub API.
+    """
+
     github_auth: Auth.Token | Auth.AppInstallationAuth
     github: Github
     repo: Repository
@@ -206,17 +217,15 @@ class RepoClient:
     base_branch: str
     repo_definition: RepoDefinition
 
-    supported_providers = ["github"]
+    supported_providers = ["github", "gitlab"]  # All supported providers for routing
 
     @sentry_sdk.trace
     def __init__(
         self, app_id: int | str | None, private_key: str | None, repo_definition: RepoDefinition
     ):
-        if repo_definition.provider not in self.supported_providers:
-            # This should never get here, the repo provider should be checked on the Sentry side but this will make debugging
-            # easier if it does
+        if repo_definition.provider != "github":
             raise InitializationError(
-                f"Unsupported repo provider: {repo_definition.provider}, only {', '.join(self.supported_providers)} are supported."
+                f"GitHubRepoClient only supports 'github' provider, got: {repo_definition.provider}"
             )
 
         GithubRetry.DEFAULT_BACKOFF_MAX = 15  # On retries, new instances are created
@@ -282,7 +291,7 @@ class RepoClient:
         self.get_git_tree = functools.lru_cache(maxsize=8)(self._get_git_tree)
 
     @staticmethod
-    def check_repo_write_access(repo: RepoDefinition):
+    def check_repo_write_access(repo: RepoDefinition) -> bool | None:
         app_id, pk = get_write_app_credentials()
 
         if app_id is None or pk is None:
@@ -300,7 +309,7 @@ class RepoClient:
         return False
 
     @staticmethod
-    def check_repo_read_access(repo: RepoDefinition):
+    def check_repo_read_access(repo: RepoDefinition) -> bool | None:
         app_id, pk = get_read_app_credentials()
 
         if app_id is None or pk is None:
@@ -821,9 +830,14 @@ class RepoClient:
             path=path, mode="100644", type="blob", sha=blob.sha if blob else None
         )
 
-    def get_branch_ref(self, branch_name: str) -> GitRef | None:
+    def get_branch_ref(self, branch_name: str) -> BranchRefResult | None:
         try:
-            return self.repo.get_git_ref(f"heads/{branch_name}")
+            git_ref = self.repo.get_git_ref(f"heads/{branch_name}")
+            return BranchRefResult(
+                ref=git_ref.ref,
+                sha=git_ref.object.sha,
+                name=branch_name,
+            )
         except GithubException as e:
             if e.status == 404:
                 return None
@@ -837,7 +851,7 @@ class RepoClient:
         file_changes: list[FileChange] | None = None,
         branch_name: str | None = None,
         from_base_sha: bool = False,
-    ) -> GitRef | None:
+    ) -> BranchRefResult | None:
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
 
@@ -902,15 +916,20 @@ class RepoClient:
             )
             return None
 
-        return branch_ref
+        # Wrap in BranchRefResult for consistent return type across providers
+        return BranchRefResult(
+            ref=branch_ref.ref,
+            sha=branch_ref.object.sha,
+            name=new_branch_name,
+        )
 
     def create_pr_from_branch(
         self,
-        branch: GitRef,
+        branch: BranchRefResult,
         title: str,
         description: str,
         provided_base: str | None = None,
-    ) -> PullRequest:
+    ) -> PullRequestResult:
         pulls = self.repo.get_pulls(state="open", head=f"{self.repo_owner}:{branch.ref}")
 
         if pulls.totalCount > 0:
@@ -924,10 +943,17 @@ class RepoClient:
                 },
             )
 
-            return pulls[0]
+            existing_pr = pulls[0]
+            return PullRequestResult(
+                number=existing_pr.number,
+                html_url=existing_pr.html_url,
+                id=existing_pr.id,
+                head_ref=branch.name,
+                head_sha=branch.sha,
+            )
 
         try:
-            return self.repo.create_pull(
+            pr = self.repo.create_pull(
                 title=title,
                 body=description,
                 base=provided_base or self.base_branch or self.get_default_branch(),
@@ -937,7 +963,7 @@ class RepoClient:
         except GithubException as e:
             if e.status == 422 and "Draft pull requests are not supported" in str(e):
                 # fallback to creating a regular PR if draft PR is not supported
-                return self.repo.create_pull(
+                pr = self.repo.create_pull(
                     title=title,
                     body=description,
                     base=provided_base or self.base_branch or self.get_default_branch(),
@@ -947,6 +973,14 @@ class RepoClient:
             else:
                 logger.exception("Error creating PR")
                 raise e
+
+        return PullRequestResult(
+            number=pr.number,
+            html_url=pr.html_url,
+            id=pr.id,
+            head_ref=branch.name,
+            head_sha=branch.sha,
+        )
 
     def get_pr_diff_content(self, pr_url: str) -> str:
         data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="diff"))
@@ -1157,15 +1191,21 @@ class RepoClient:
         ).total_seconds()
 
 
+# Backward-compatible alias
+RepoClient = GitHubRepoClient
+
+
 def get_repo_client(
     repos: list[RepoDefinition],
     repo_name: str | None = None,
     repo_external_id: str | None = None,
     type: RepoClientType = RepoClientType.READ,
-) -> RepoClient:
+) -> BaseRepoClient:
     """
     Gets a repo client for the current single repo or for a given repo name.
     If there are more than 1 repos, a repo name must be provided.
+
+    Routes to the appropriate provider implementation based on the repo's provider.
     """
     repo: RepoDefinition | None = None
     if len(repos) == 1:
@@ -1180,7 +1220,13 @@ def get_repo_client(
             "Repo not found. Please provide a valid repo name or external ID."
         )
 
-    return RepoClient.from_repo_definition(repo, type)
+    # Route to appropriate provider
+    if repo.provider == "gitlab":
+        from seer.automation.codebase.gitlab_repo_client import GitLabRepoClient
+
+        return GitLabRepoClient.from_repo_definition(repo, type)
+
+    return GitHubRepoClient.from_repo_definition(repo, type)
 
 
 def autocorrect_repo_name(readable_repos: list[RepoDefinition], repo_name: str) -> str | None:
@@ -1195,7 +1241,9 @@ def autocorrect_repo_name(readable_repos: list[RepoDefinition], repo_name: str) 
         The corrected repository name if a match is found, or None if no match is found
     """
     repo_names = [
-        repo.full_name for repo in readable_repos if repo.provider in RepoClient.supported_providers
+        repo.full_name
+        for repo in readable_repos
+        if repo.provider in GitHubRepoClient.supported_providers
     ]
     if repo_name and repo_name in repo_names:
         return repo_name

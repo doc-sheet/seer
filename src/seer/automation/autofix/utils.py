@@ -1,7 +1,7 @@
 import random
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 from rapidfuzz import fuzz, process
 
 VALID_RANDOM_SUFFIX_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

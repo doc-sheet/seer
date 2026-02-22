@@ -2,7 +2,7 @@ from asyncio.log import logger
 from typing import Any
 
 from github.PullRequestComment import PullRequestComment
-from langfuse.decorators import observe
+from langfuse import observe
 from sentry_sdk.ai.monitoring import ai_track
 from sqlalchemy.dialects.postgresql import insert
 

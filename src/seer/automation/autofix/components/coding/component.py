@@ -2,7 +2,7 @@ import json
 import logging
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, LlmClient
@@ -176,7 +176,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     models=[
                         AnthropicProvider.model("claude-sonnet-4@20250514"),
                         AnthropicProvider.model("claude-3-7-sonnet@20250219"),
-                        AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                        AnthropicProvider.model("claude-sonnet-4@20250514"),
                     ],
                 ),
             )

@@ -31,7 +31,7 @@ class GoogleProviderEmbeddings:
         retrier = backoff_on_exception(
             GeminiProvider.is_completion_exception_retryable, max_tries=4
         )
-        model.get_embeddings = retrier(model.get_embeddings)
+        model.get_embeddings = retrier(model.get_embeddings)  # type: ignore[method-assign]
         return model
 
     @classmethod
@@ -93,7 +93,7 @@ class GoogleProviderEmbeddings:
         ):
             text_embedding_inputs = self._prepare_inputs(batch)
             embeddings_batch = model.get_embeddings(
-                text_embedding_inputs,
+                text_embedding_inputs,  # type: ignore[arg-type]
                 auto_truncate=auto_truncate,
                 output_dimensionality=self.output_dimensionality,
             )

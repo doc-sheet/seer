@@ -1,7 +1,7 @@
 import json
 import textwrap
 
-from langfuse.decorators import observe
+from langfuse import observe
 from pydantic import BaseModel, model_validator
 
 from seer.automation.agent.client import LlmClient, OpenAiProvider

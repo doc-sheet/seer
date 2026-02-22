@@ -1,7 +1,9 @@
 import logging
 
-from langfuse.client import DatasetItemClient
-from langfuse.decorators import observe
+from langfuse import observe
+
+# DatasetItemClient moved to private module in langfuse 3.x
+from langfuse._client.client import DatasetItemClient  # type: ignore[attr-defined]
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.codegen.bug_prediction_step import BugPredictionStep
@@ -29,10 +31,10 @@ def sync_run_evaluation_on_item(
       - Fetching the Sentry issues
     """
 
-    item = EvalItemInput.model_validate(item.input)
+    eval_item = EvalItemInput.model_validate(item.input)
 
     # Build the request from the item.
-    request = item.get_request()
+    request = eval_item.get_request()
     # Make sure we don't post to Overwatch.
     request.should_post_to_overwatch = False
 

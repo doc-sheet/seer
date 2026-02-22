@@ -10,7 +10,7 @@ Cython==3.0.2
 ephem==4.1.4
 filelock==3.12.2
 Flask==2.2.*
-fonttools==4.43.0
+fonttools>=4.60.2
 fsspec==2023.6.0
 gunicorn==22.*
 holidays==0.31
@@ -32,12 +32,15 @@ pandas==2.0.3
 patsy==0.5.3
 Pillow==10.3.0
 PyGithub==2.1.1
+python-gitlab>=4.0.0,<5.0.0
 pyparsing==3.0.9
 python-dateutil==2.8.2
 pytz==2021.3
 PyYAML==6.0.1
 regex==2023.8.8
-requests==2.32.2
+redis>=4.0.0
+async-timeout>=4.0.0
+requests>=2.32.4
 scikit-learn==1.3.0
 scipy==1.11.2
 seaborn==0.12.2
@@ -96,7 +99,7 @@ google-cloud-storage==2.*
 google-cloud-aiplatform==1.*
 google-cloud-secret-manager==2.*
 anthropic[vertex]==0.*
-langfuse @ git+https://github.com/jennmueng/langfuse-python.git@d7c0127682ddb20f73c5cf4fbb396cdfa8961fc3
+langfuse>=3.0.0
 watchdog
 stumpy==1.13.0
 pytest_alembic==0.11.1
@@ -118,3 +121,4 @@ tsmoothie==1.0.*
 datadog==0.51.*
 flower==2.0.1
 GitPython==3.1.*
+cachetools>=5.0.0

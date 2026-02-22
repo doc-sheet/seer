@@ -1,7 +1,7 @@
 import textwrap
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -77,7 +77,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
         with self.context.state.update() as cur:
             cur.usage += output.metadata.usage
 
-        if data is None:
-            return None
+        if data is None:  # type: ignore[unreachable]
+            return None  # type: ignore[unreachable]
 
         return data

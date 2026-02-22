@@ -1,10 +1,10 @@
 import textwrap
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 from pydantic import BaseModel
 
-from seer.automation.agent.client import GeminiProvider, LlmClient
+from seer.automation.agent.client import LlmClient, OpenAiProvider
 from seer.automation.autofixability import AutofixabilityModel
 from seer.automation.models import EventDetails
 from seer.automation.summarize.models import (
@@ -77,8 +77,9 @@ class IssueSummaryForLlmToGenerate(BaseModel):
 @sentry_sdk.trace
 @inject
 def summarize_issue(
-    request: SummarizeIssueRequest, llm_client: LlmClient = injected
+    request: SummarizeIssueRequest, llm_client: LlmClient = injected, **kwargs
 ) -> IssueSummaryWithScores:
+    # kwargs accepts langfuse_tags, langfuse_session_id, langfuse_user_id for tracing
     event_details = EventDetails.from_event(
         event=request.issue.events[0], issue_title=request.issue.title
     )
@@ -152,8 +153,9 @@ def summarize_issue(
         )
 
         try:
+            # Use OpenAI for self-hosted (Gemini requires GCP Workload Identity)
             completion = llm_client.generate_structured(
-                model=GeminiProvider.model("gemini-2.0-flash-lite-001"),
+                model=OpenAiProvider.model("gpt-4o-mini"),
                 prompt=prompt,
                 response_format=IssueSummaryForLlmToGenerate,
                 temperature=0.0,
@@ -215,7 +217,7 @@ def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueRespons
         }
     )
 
-    summary = summarize_issue(request, **extra_kwargs)
+    summary = summarize_issue(request, **extra_kwargs)  # type: ignore[arg-type]
 
     with Session() as session:
         db_state = summary.to_db_state(request.group_id)

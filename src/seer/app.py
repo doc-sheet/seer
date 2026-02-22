@@ -10,6 +10,7 @@ from flask import Blueprint, Flask, jsonify
 from openai import APITimeoutError
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sqlalchemy.dialects.postgresql import insert
 from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
 from integrations.codecov.codecov_auth import CodecovAuthentication
@@ -96,6 +97,44 @@ from seer.automation.codegen.tasks import (
     codegen_unittest,
     get_unittest_state,
 )
+from seer.automation.explorer.models import (
+    AnomalyDetectionAlertDataRequest,
+    AnomalyDetectionAlertDataResponse,
+    AssistedQueryStartRequest,
+    AssistedQueryStartResponse,
+    AssistedQueryStateRequest,
+    AssistedQueryStateResponse,
+    AssistedQueryTranslateAgenticRequest,
+    AssistedQueryTranslateAgenticResponse,
+    AutofixPromptRequest,
+    AutofixPromptResponse,
+    CodegenPrReviewRerunRequest,
+    CodegenPrReviewRerunResponse,
+    CodingAgentStateSetRequest,
+    CodingAgentStateSetResponse,
+    CodingAgentStateUpdateRequest,
+    CodingAgentStateUpdateResponse,
+    ExplorerChatRequest,
+    ExplorerChatResponse,
+    ExplorerRunsRequest,
+    ExplorerRunsResponse,
+    ExplorerStateRequest,
+    ExplorerStateResponse,
+    ExplorerUpdateRequest,
+    ExplorerUpdateResponse,
+    LlmGenerateRequest,
+    LlmGenerateResponse,
+    ProjectPreferenceBulkRequest,
+    ProjectPreferenceBulkResponse,
+    ProjectPreferenceBulkSetRequest,
+    ProjectPreferenceBulkSetResponse,
+    SupergroupsRequest,
+    SupergroupsResponse,
+    WorkflowsCompareCohortRequest,
+    WorkflowsCompareCohortResponse,
+)
+from seer.automation.explorer.state import ExplorerRunState
+from seer.automation.explorer.tasks import process_explorer_chat
 from seer.automation.preferences import (
     GetSeerProjectPreferenceRequest,
     GetSeerProjectPreferenceResponse,
@@ -116,6 +155,7 @@ from seer.automation.summarize.traces import summarize_trace
 from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
+from seer.db import DbGroupingRecord, Session
 from seer.dependency_injection import inject, injected, resolve
 from seer.exceptions import ClientError, ServerError
 from seer.grouping.grouping import (
@@ -637,6 +677,782 @@ def translate_endpoint(data: TranslateRequest) -> TranslateResponses:
         raise InternalServerError from e
 
     return response
+
+
+# =============================================================================
+# Explorer Endpoints
+# =============================================================================
+# These endpoints provide LLM-powered chat functionality for issue analysis.
+# Requires ANTHROPIC_API_KEY environment variable to be set.
+
+
+@json_api(blueprint, "/v1/automation/explorer/runs")
+def explorer_runs_endpoint(data: ExplorerRunsRequest) -> ExplorerRunsResponse:
+    """List explorer runs for an organization."""
+    try:
+        runs = ExplorerRunState.list(
+            organization_id=data.organization_id,
+            category_key=data.category_key,
+            category_value=data.category_value,
+        )
+        return ExplorerRunsResponse(data=runs)
+    except Exception as e:
+        logger.exception(f"Error listing explorer runs: {e}")
+        return ExplorerRunsResponse(data=[])
+
+
+@json_api(blueprint, "/v1/automation/explorer/chat")
+def explorer_chat_endpoint(data: ExplorerChatRequest) -> ExplorerChatResponse:
+    """Process an explorer chat message."""
+    import os
+
+    app_config = resolve(AppConfig)
+
+    # Check if Anthropic API key is configured
+    if not app_config.ANTHROPIC_API_KEY and not os.environ.get("ANTHROPIC_API_KEY"):
+        return ExplorerChatResponse(
+            status="not_available",
+            message="Explorer requires ANTHROPIC_API_KEY to be configured",
+            run_id=None,
+        )
+
+    try:
+        # Create new run or get existing
+        if data.run_id is None:
+            state = ExplorerRunState.create(
+                organization_id=data.organization_id,
+                category_key=data.category_key,
+                category_value=data.category_value,
+                metadata=data.metadata,
+            )
+            run_id = state.run_id
+        else:
+            existing_state = ExplorerRunState.get(data.run_id)
+            if existing_state is None:
+                return ExplorerChatResponse(
+                    status="error",
+                    message=f"Run {data.run_id} not found",
+                    run_id=None,
+                )
+            run_id = data.run_id
+
+        # Get query from request
+        query = data.get_query()
+        if not query:
+            return ExplorerChatResponse(
+                status="error",
+                message="No query provided",
+                run_id=run_id,
+            )
+
+        # Convert tools to serializable format
+        tools_data = None
+        if data.tools:
+            tools_data = [t.model_dump(mode="json") for t in data.tools]
+
+        # Queue the processing task
+        process_explorer_chat.delay(
+            run_id=run_id,
+            query=query,
+            artifact_key=data.artifact_key,
+            artifact_schema=data.artifact_schema,
+            tools=tools_data,
+            metadata=data.metadata,
+        )
+
+        return ExplorerChatResponse(
+            status="processing",
+            run_id=run_id,
+            message=None,
+        )
+
+    except Exception as e:
+        logger.exception(f"Error processing explorer chat: {e}")
+        sentry_sdk.capture_exception(e)
+        return ExplorerChatResponse(
+            status="error",
+            message=str(e),
+            run_id=data.run_id,
+        )
+
+
+@json_api(blueprint, "/v1/automation/explorer/state")
+def explorer_state_endpoint(data: ExplorerStateRequest) -> ExplorerStateResponse:
+    """Get the current state of an explorer run."""
+    try:
+        state = ExplorerRunState.get(data.run_id)
+        if state is None:
+            return ExplorerStateResponse(
+                session=None,
+                status="not_found",
+                message=f"Run {data.run_id} not found",
+            )
+
+        return ExplorerStateResponse(
+            session=state.to_seer_run_state(),
+            status="ok",
+            message=None,
+        )
+
+    except Exception as e:
+        logger.exception(f"Error getting explorer state: {e}")
+        return ExplorerStateResponse(
+            session=None,
+            status="error",
+            message=str(e),
+        )
+
+
+@json_api(blueprint, "/v1/automation/explorer/update")
+def explorer_update_endpoint(data: ExplorerUpdateRequest) -> ExplorerUpdateResponse:
+    """Update an explorer run."""
+    try:
+        state = ExplorerRunState.get(data.run_id)
+        if state is None:
+            return ExplorerUpdateResponse(
+                status="error",
+                message=f"Run {data.run_id} not found",
+            )
+
+        # Handle different update types
+        if data.update_type == "cancel":
+            from seer.automation.explorer.models import ExplorerStatus
+
+            state.set_status(ExplorerStatus.COMPLETED)
+            state.set_loading(False)
+
+        return ExplorerUpdateResponse(status="ok", message=None)
+
+    except Exception as e:
+        logger.exception(f"Error updating explorer run: {e}")
+        return ExplorerUpdateResponse(
+            status="error",
+            message=str(e),
+        )
+
+
+# ============================================
+# Coding agent endpoints (required for Cursor/Copilot integration)
+# ============================================
+
+
+@json_api(blueprint, "/v1/automation/autofix/coding-agent/state/set")
+def coding_agent_state_set_endpoint(
+    data: CodingAgentStateSetRequest,
+) -> CodingAgentStateSetResponse:
+    """Store coding agent states in the autofix run.
+
+    Sentry calls this after launching external coding agents (Cursor, GitHub Copilot)
+    to persist their initial state in the autofix run.
+    """
+    from seer.automation.autofix.models import ExternalCodingAgentResult, ExternalCodingAgentState
+    from seer.automation.autofix.state import ContinuationState
+
+    try:
+        state = ContinuationState(data.run_id)
+        with state.update() as cur:
+            for agent_data in data.coding_agent_states:
+                agent_id = agent_data.get("id", "")
+                if not agent_id:
+                    continue
+                results = [ExternalCodingAgentResult(**r) for r in agent_data.get("results", [])]
+                agent_state = ExternalCodingAgentState(
+                    id=agent_id,
+                    status=agent_data.get("status", "pending"),
+                    agent_url=agent_data.get("agent_url"),
+                    provider=agent_data.get("provider", ""),
+                    name=agent_data.get("name", ""),
+                    started_at=agent_data.get("started_at"),
+                    results=results,
+                )
+                cur.coding_agents[agent_id] = agent_state
+
+        logger.info(
+            "coding_agent.state_set",
+            extra={
+                "run_id": data.run_id,
+                "num_agents": len(data.coding_agent_states),
+            },
+        )
+        return CodingAgentStateSetResponse(status="ok")
+    except Exception as e:
+        logger.exception(f"Error setting coding agent state: {e}")
+        return CodingAgentStateSetResponse(status="error", message=str(e))
+
+
+@json_api(blueprint, "/v1/automation/autofix/coding-agent/state/update")
+def coding_agent_state_update_endpoint(
+    data: CodingAgentStateUpdateRequest,
+) -> CodingAgentStateUpdateResponse:
+    """Update a coding agent's state in its autofix run.
+
+    Sentry calls this from webhook handlers (e.g., Cursor webhook) when an
+    external coding agent reports status changes, completions, or failures.
+    """
+    from seer.automation.autofix.models import ExternalCodingAgentResult
+    from seer.automation.autofix.state import ContinuationState
+    from seer.db import DbRunState
+
+    try:
+        # Find the run containing this agent_id by scanning recent runs
+        with Session() as session:
+            recent_runs = (
+                session.query(DbRunState)
+                .filter(DbRunState.type == "autofix")
+                .order_by(DbRunState.id.desc())
+                .limit(100)
+                .all()
+            )
+            target_run_id = None
+            for run_state in recent_runs:
+                try:
+                    cs = ContinuationState(run_state.id)
+                    cur = cs.get()
+                    if data.agent_id in cur.coding_agents:
+                        target_run_id = run_state.id
+                        break
+                except Exception:
+                    continue
+
+        if target_run_id is None:
+            logger.warning(
+                "coding_agent.state_update.agent_not_found",
+                extra={"agent_id": data.agent_id},
+            )
+            return CodingAgentStateUpdateResponse(
+                status="error", message=f"Agent {data.agent_id} not found"
+            )
+
+        state = ContinuationState(target_run_id)
+        with state.update() as cur:
+            agent = cur.coding_agents.get(data.agent_id)
+            if agent is None:
+                return CodingAgentStateUpdateResponse(
+                    status="error", message=f"Agent {data.agent_id} not found in run"
+                )
+
+            if data.updates.status is not None:
+                agent.status = data.updates.status
+            if data.updates.agent_url is not None:
+                agent.agent_url = data.updates.agent_url
+            if data.updates.results is not None:
+                agent.results = [ExternalCodingAgentResult(**r) for r in data.updates.results]
+
+        logger.info(
+            "coding_agent.state_updated",
+            extra={
+                "agent_id": data.agent_id,
+                "run_id": target_run_id,
+                "status": data.updates.status,
+            },
+        )
+        return CodingAgentStateUpdateResponse(status="ok")
+    except Exception as e:
+        logger.exception(f"Error updating coding agent state: {e}")
+        return CodingAgentStateUpdateResponse(status="error", message=str(e))
+
+
+@json_api(blueprint, "/v1/automation/autofix/prompt")
+def autofix_prompt_endpoint(data: AutofixPromptRequest) -> AutofixPromptResponse:
+    """Build and return the autofix prompt from the run's state.
+
+    Sentry calls this to get the prompt text for external coding agents.
+    The prompt includes the issue context, root cause analysis (if selected),
+    and solution plan (if selected).
+    """
+    from seer.automation.autofix.state import ContinuationState
+
+    try:
+        state = ContinuationState(data.run_id)
+        cur = state.get()
+
+        parts: list[str] = []
+
+        # Issue context from the request
+        issue = cur.request.issue
+        parts.append(f"Issue: {issue.title}")
+
+        if hasattr(issue, "events") and issue.events:
+            event = issue.events[0]
+            # Extract exception info if available
+            for entry in event.get("entries", []):
+                if entry.get("type") == "exception":
+                    for exc in entry.get("data", {}).get("values", []):
+                        exc_type = exc.get("type", "")
+                        exc_value = exc.get("value", "")
+                        if exc_type or exc_value:
+                            parts.append(f"\nException: {exc_type}: {exc_value}")
+                        stacktrace = exc.get("stacktrace")
+                        if stacktrace and stacktrace.get("frames"):
+                            frames = stacktrace["frames"]
+                            # Show last 5 in-app frames
+                            in_app = [f for f in frames if f.get("in_app", False)]
+                            relevant = in_app[-5:] if in_app else frames[-5:]
+                            trace_lines = []
+                            for frame in relevant:
+                                filename = frame.get("filename", "?")
+                                lineno = frame.get("lineNo") or frame.get("lineno", "?")
+                                func = frame.get("function", "?")
+                                trace_lines.append(f"  {filename}:{lineno} in {func}")
+                            if trace_lines:
+                                parts.append("Stacktrace (most relevant):")
+                                parts.extend(trace_lines)
+
+        # Root cause
+        if data.include_root_cause:
+            root_cause, instruction = cur.get_selected_root_cause()
+            if root_cause is not None:
+                parts.append("\n--- Root Cause Analysis ---")
+                if isinstance(root_cause, str):
+                    parts.append(root_cause)
+                else:
+                    if root_cause.description:
+                        parts.append(root_cause.description)
+                    if root_cause.root_cause_reproduction:
+                        for i, timeline_event in enumerate(root_cause.root_cause_reproduction):
+                            parts.append(f"\nStep {i + 1}: {timeline_event.title}")
+                            if timeline_event.code_snippet_and_analysis:
+                                parts.append(timeline_event.code_snippet_and_analysis)
+                            code_file = getattr(timeline_event, "relevant_code_file", None)
+                            if (
+                                code_file
+                                and hasattr(code_file, "file_path")
+                                and code_file.file_path
+                            ):
+                                parts.append(f"File: {code_file.file_path}")
+                if instruction:
+                    parts.append(f"\nAdditional instruction: {instruction}")
+
+        # Solution
+        if data.include_solution:
+            solution, mode = cur.get_selected_solution()
+            if solution is not None:
+                parts.append("\n--- Solution Plan ---")
+                if isinstance(solution, str):
+                    parts.append(solution)
+                else:
+                    for i, step in enumerate(solution):
+                        if step.is_active:
+                            parts.append(f"\nStep {i + 1}: {step.title}")
+                            if step.code_snippet_and_analysis:
+                                parts.append(step.code_snippet_and_analysis)
+
+        # Repo context
+        if cur.request.repos:
+            parts.append("\n--- Repositories ---")
+            for repo in cur.request.repos:
+                repo_name = (
+                    f"{repo.owner}/{repo.name}" if hasattr(repo, "owner") else repo.full_name
+                )
+                parts.append(f"- {repo_name}")
+
+        prompt_text = "\n".join(parts)
+        return AutofixPromptResponse(prompt=prompt_text)
+    except Exception as e:
+        logger.exception(f"Error building autofix prompt: {e}")
+        return AutofixPromptResponse(prompt=None, message=str(e))
+
+
+# ============================================
+# Additional stub endpoints for Sentry 26.x compatibility
+# ============================================
+
+
+@json_api(blueprint, "/v1/automation/codegen/pr-review/rerun")
+def codegen_pr_review_rerun_endpoint(
+    data: CodegenPrReviewRerunRequest,
+) -> CodegenPrReviewRerunResponse:
+    """Rerun PR review - stub for self-hosted."""
+    return CodegenPrReviewRerunResponse(
+        status="not_available", message="PR review rerun not available in self-hosted mode"
+    )
+
+
+@json_api(blueprint, "/v1/project-preference/bulk")
+def get_project_preference_bulk_endpoint(
+    data: ProjectPreferenceBulkRequest,
+) -> ProjectPreferenceBulkResponse:
+    """Get bulk project preferences - stub for self-hosted."""
+    return ProjectPreferenceBulkResponse(preferences={}, message="Bulk preferences retrieved")
+
+
+@json_api(blueprint, "/v1/project-preference/bulk-set")
+def set_project_preference_bulk_endpoint(
+    data: ProjectPreferenceBulkSetRequest,
+) -> ProjectPreferenceBulkSetResponse:
+    """Set bulk project preferences - stub for self-hosted."""
+    return ProjectPreferenceBulkSetResponse(status="ok", message="Bulk preferences set")
+
+
+# ============================================
+# Sentry 26.2.0 endpoints — implemented using existing Seer infrastructure
+# ============================================
+
+
+@json_api(blueprint, "/v1/llm/generate")
+def llm_generate_endpoint(data: LlmGenerateRequest) -> LlmGenerateResponse:
+    """LLM text generation for issue view titles and similar features.
+
+    Uses OpenAI via the existing LlmClient infrastructure. Sentry sends
+    provider="gemini" but we route to OpenAI for self-hosted.
+    """
+    from seer.automation.agent.client import LlmClient, OpenAiProvider
+
+    try:
+        # Map Sentry's model names to OpenAI models
+        # Sentry sends "flash" (Gemini Flash) — we use gpt-4o-mini as equivalent
+        model_mapping = {
+            "flash": "gpt-4o-mini",
+            "pro": "gpt-4o",
+        }
+        model_name = model_mapping.get(data.model, "gpt-4o-mini")
+        model = OpenAiProvider.model(model_name)
+
+        llm_client = LlmClient()
+        response = llm_client.generate_text(
+            prompt=data.prompt,
+            model=model,
+            system_prompt=data.system_prompt or None,
+            temperature=data.temperature,
+            max_tokens=data.max_tokens,
+        )
+
+        content = response.message.content if response.message else None
+        logger.info(
+            "llm_generate.success",
+            extra={"referrer": data.referrer, "model": model_name},
+        )
+        return LlmGenerateResponse(content=content)
+    except Exception as e:
+        logger.exception(f"Error in LLM generate: {e}")
+        return LlmGenerateResponse(content=None)
+
+
+@json_api(blueprint, "/v1/assisted-query/translate-agentic")
+def assisted_query_translate_agentic_endpoint(
+    data: AssistedQueryTranslateAgenticRequest,
+) -> AssistedQueryTranslateAgenticResponse:
+    """Translate natural language query to Sentry query syntax using LLM.
+
+    Uses the existing assisted_query translate_query infrastructure.
+    """
+    from seer.automation.assisted_query.models import TranslateRequest
+
+    try:
+        if not data.natural_language_query:
+            return AssistedQueryTranslateAgenticResponse(query=None)
+
+        result = translate_query(
+            TranslateRequest(
+                org_id=data.org_id or 0,
+                project_ids=data.project_ids,
+                natural_language_query=data.natural_language_query,
+            )
+        )
+
+        if result.responses:
+            first = result.responses[0]
+            logger.info(
+                "assisted_query.translate_agentic.success",
+                extra={"query": first.query, "strategy": data.strategy},
+            )
+            return AssistedQueryTranslateAgenticResponse(query=first.query)
+
+        return AssistedQueryTranslateAgenticResponse(query=None)
+    except Exception as e:
+        logger.exception(f"Error in agentic query translation: {e}")
+        return AssistedQueryTranslateAgenticResponse(query=None)
+
+
+@json_api(blueprint, "/v1/assisted-query/start")
+def assisted_query_start_endpoint(
+    data: AssistedQueryStartRequest,
+) -> AssistedQueryStartResponse:
+    """Start an async assisted query run.
+
+    Creates a run state and queues translation via the Explorer run infrastructure.
+    Returns a run_id for subsequent state polling.
+    """
+    try:
+        if not data.natural_language_query:
+            return AssistedQueryStartResponse(run_id=None)
+
+        state = ExplorerRunState.create(
+            organization_id=data.org_id,
+            category_key="assisted-query",
+            category_value=data.strategy,
+            metadata={
+                "natural_language_query": data.natural_language_query,
+                "project_ids": data.project_ids,
+                "org_slug": data.org_slug,
+                "strategy": data.strategy,
+            },
+        )
+
+        # Queue async processing using the explorer chat task infrastructure
+        process_explorer_chat.delay(
+            run_id=state.run_id,
+            query=data.natural_language_query,
+            metadata={
+                "organization_id": data.org_id,
+                "category_key": "assisted-query",
+                "category_value": data.strategy,
+            },
+        )
+
+        logger.info(
+            "assisted_query.start.success",
+            extra={"run_id": state.run_id, "strategy": data.strategy},
+        )
+        return AssistedQueryStartResponse(run_id=state.run_id)
+    except Exception as e:
+        logger.exception(f"Error starting assisted query: {e}")
+        return AssistedQueryStartResponse(run_id=None)
+
+
+@json_api(blueprint, "/v1/assisted-query/state")
+def assisted_query_state_endpoint(
+    data: AssistedQueryStateRequest,
+) -> AssistedQueryStateResponse:
+    """Get the current state of an assisted query run.
+
+    Loads state from DB using the Explorer run state infrastructure.
+    """
+    try:
+        run_state = ExplorerRunState.get(data.run_id)
+        if run_state is None:
+            return AssistedQueryStateResponse(session=None)
+
+        cur = run_state.get_state()
+        session_data = cur.model_dump(mode="json")
+        return AssistedQueryStateResponse(session=session_data)
+    except Exception as e:
+        logger.warning(
+            "assisted_query.state.error",
+            extra={"run_id": data.run_id, "error": str(e)},
+        )
+        return AssistedQueryStateResponse(session=None)
+
+
+@json_api(blueprint, "/v1/anomaly-detection/alert-data")
+def anomaly_detection_alert_data_endpoint(
+    data: AnomalyDetectionAlertDataRequest,
+) -> AnomalyDetectionAlertDataResponse:
+    """Get anomaly detection alert threshold data.
+
+    Queries the existing anomaly detection DB for time series data
+    and prediction bounds for a given alert in a time window.
+    """
+    from seer.anomaly_detection.accessors import DbAlertDataAccessor
+
+    try:
+        alert_info = data.alert
+        alert_id = alert_info.get("id")
+        source_id = alert_info.get("source_id")
+        source_type = alert_info.get("source_type")
+
+        if alert_id is None and source_id is None:
+            return AnomalyDetectionAlertDataResponse(
+                success=False, message="Either alert id or source_id required", data=[]
+            )
+
+        accessor = DbAlertDataAccessor()
+        alert = accessor.query(
+            external_alert_id=alert_id,
+            external_alert_source_id=source_id,
+            external_alert_source_type=source_type,
+        )
+
+        if alert is None:
+            return AnomalyDetectionAlertDataResponse(
+                success=True, message="Alert not found", data=[]
+            )
+
+        # Build timestamp→prediction index from prophet predictions
+        # Prophet predictions have their own timestamps array, separate from timeseries
+        predictions = alert.prophet_predictions
+        pred_map: dict[float, int] = {}
+        if predictions is not None:
+            for i in range(len(predictions.timestamps)):
+                pred_map[float(predictions.timestamps[i])] = i
+
+        ts = alert.timeseries
+        result_data = []
+        ext_alert_id = alert.external_alert_id or 0
+
+        for i in range(len(ts.timestamps)):
+            timestamp = float(ts.timestamps[i])
+            if data.start <= timestamp <= data.end:
+                point: dict = {
+                    "external_alert_id": ext_alert_id,
+                    "timestamp": timestamp,
+                    "value": float(ts.values[i]),
+                    "yhat_lower": 0.0,
+                    "yhat_upper": 0.0,
+                }
+                pred_idx = pred_map.get(timestamp)
+                if pred_idx is not None:
+                    point["yhat_upper"] = float(predictions.yhat_upper[pred_idx])
+                    point["yhat_lower"] = float(predictions.yhat_lower[pred_idx])
+                result_data.append(point)
+
+        return AnomalyDetectionAlertDataResponse(success=True, data=result_data)
+    except Exception as e:
+        logger.exception(f"Error getting anomaly detection alert data: {e}")
+        return AnomalyDetectionAlertDataResponse(success=False, message=str(e), data=[])
+
+
+@json_api(blueprint, "/v1/workflows/compare/cohort")
+def workflows_compare_cohort_endpoint(
+    data: WorkflowsCompareCohortRequest,
+) -> WorkflowsCompareCohortResponse:
+    """Compare cohort distributions and rank attributes by suspiciousness.
+
+    Uses the existing CompareService with KL divergence and entropy metrics.
+    """
+    from seer.workflows.compare.models import (
+        AttributeDistributions,
+        CompareCohortsConfig,
+        CompareCohortsMeta,
+        StatsAttribute,
+        StatsAttributeBucket,
+        StatsCohort,
+    )
+
+    try:
+        # Build the proper request model from the raw data
+        # Sentry sends: baseline, outliers (lists), total_baseline, total_outliers, config, meta
+        baseline_attrs = []
+        for item in data.baseline:
+            if isinstance(item, dict) and "attributeName" in item:
+                buckets = [
+                    StatsAttributeBucket(
+                        attributeValue=b.get("attributeValue", ""),
+                        attributeValueCount=b.get("attributeValueCount", 0),
+                    )
+                    for b in item.get("buckets", [])
+                ]
+                baseline_attrs.append(
+                    StatsAttribute(attributeName=item["attributeName"], buckets=buckets)
+                )
+
+        outlier_attrs = []
+        for item in data.outliers:
+            if isinstance(item, dict) and "attributeName" in item:
+                buckets = [
+                    StatsAttributeBucket(
+                        attributeValue=b.get("attributeValue", ""),
+                        attributeValueCount=b.get("attributeValueCount", 0),
+                    )
+                    for b in item.get("buckets", [])
+                ]
+                outlier_attrs.append(
+                    StatsAttribute(attributeName=item["attributeName"], buckets=buckets)
+                )
+
+        config_data = data.config or {}
+        meta_data = data.meta or {}
+
+        request = CompareCohortsRequest(
+            baseline=StatsCohort(
+                totalCount=data.total_baseline,
+                attributeDistributions=AttributeDistributions(attributes=baseline_attrs),
+            ),
+            selection=StatsCohort(
+                totalCount=data.total_outliers,
+                attributeDistributions=AttributeDistributions(attributes=outlier_attrs),
+            ),
+            config=CompareCohortsConfig(**{k: v for k, v in config_data.items() if v is not None}),
+            meta=CompareCohortsMeta(referrer=meta_data.get("referrer", "unknown")),
+        )
+
+        result = compare_cohort(request)
+        return WorkflowsCompareCohortResponse(results=result.results)
+    except Exception as e:
+        logger.exception(f"Error in cohort comparison: {e}")
+        return WorkflowsCompareCohortResponse(results=[])
+
+
+@json_api(blueprint, "/v0/issues/supergroups")
+def supergroups_endpoint(data: SupergroupsRequest) -> SupergroupsResponse:
+    """Embed root cause analysis for issue supergroup clustering.
+
+    Receives root cause artifact data from completed autofix runs,
+    encodes it using the grouping model, and stores the embedding
+    for future similarity queries across issues.
+    """
+    if not data.group_id or not data.artifact_data:
+        return SupergroupsResponse(status="ok")
+
+    app_config = resolve(AppConfig)
+    if not app_config.is_grouping_enabled:
+        logger.info(
+            "supergroups.skipped_grouping_disabled",
+            extra={"group_id": data.group_id},
+        )
+        return SupergroupsResponse(status="ok")
+
+    # Extract text from root cause artifact data
+    text_parts = []
+    if data.artifact_data.get("description"):
+        text_parts.append(data.artifact_data["description"])
+    for event in data.artifact_data.get("root_cause_reproduction", []):
+        if isinstance(event, dict):
+            if event.get("title"):
+                text_parts.append(event["title"])
+            if event.get("code_snippet_and_analysis"):
+                text_parts.append(event["code_snippet_and_analysis"])
+
+    if not text_parts:
+        logger.info(
+            "supergroups.no_text_to_embed",
+            extra={"group_id": data.group_id},
+        )
+        return SupergroupsResponse(status="ok")
+
+    root_cause_text = "\n".join(text_parts)
+
+    try:
+        embedding = grouping_lookup().encode_text(root_cause_text).astype("float32")
+
+        # Store using org_id as project_id partition and prefixed hash
+        # to separate from normal stacktrace embeddings
+        org_id = data.organization_id or 0
+        group_hash = f"sg_{data.group_id}"[:32]
+
+        with Session() as session:
+            insert_stmt = insert(DbGroupingRecord).values(
+                project_id=org_id,
+                stacktrace_embedding=embedding,
+                hash=group_hash,
+                error_type="supergroup_root_cause",
+            )
+            session.execute(
+                insert_stmt.on_conflict_do_update(
+                    index_elements=(DbGroupingRecord.project_id, DbGroupingRecord.hash),
+                    set_={"stacktrace_embedding": embedding},
+                )
+            )
+            session.commit()
+
+        logger.info(
+            "supergroups.embedding_stored",
+            extra={
+                "organization_id": data.organization_id,
+                "group_id": data.group_id,
+                "text_length": len(root_cause_text),
+            },
+        )
+    except Exception as e:
+        logger.exception(
+            f"supergroups.embedding_failed: {e}",
+            extra={
+                "organization_id": data.organization_id,
+                "group_id": data.group_id,
+            },
+        )
+
+    return SupergroupsResponse(status="ok")
 
 
 @blueprint.route("/health/live", methods=["GET"])

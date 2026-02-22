@@ -64,7 +64,7 @@ def fallback_run_config():
         prompt="Fix this bug.",
         models=[
             OpenAiProvider.model("gpt-4o-mini-2024-07-18"),
-            AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+            AnthropicProvider.model("claude-sonnet-4@20250514"),
         ],
         temperature=0.0,
         run_name="Test Autofix Run with Fallback",

@@ -2,7 +2,7 @@ import textwrap
 from venv import logger
 
 from google.genai.errors import ClientError
-from langfuse.decorators import observe
+from langfuse import observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import GeminiProvider, LlmClient

@@ -63,6 +63,17 @@ class GithubPrReviewComment(TypedDict):
     in_reply_to: NotRequired[str]
 
 
+class GitLabMrReviewComment(TypedDict):
+    """TypedDict for GitLab Merge Request review comments (discussion notes)."""
+
+    body: str
+    position: NotRequired[dict]  # Position for inline comments (new_path, new_line, etc.)
+    base_sha: NotRequired[str]
+    start_sha: NotRequired[str]
+    head_sha: NotRequired[str]
+    position_type: NotRequired[Literal["text", "image"]]
+
+
 # Copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/typings.py
 class Location(BaseModel):
     filename: str

@@ -1,7 +1,7 @@
 import logging
 
 import sentry_sdk
-from langfuse.decorators import observe
+from langfuse import observe
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
@@ -142,12 +142,12 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     "Arranging data in a way that looks intentional..."
                 )
 
-                de_formatter_config = {
+                de_formatter_config: dict[str, object] = {
                     "model": GeminiProvider.model("gemini-2.0-flash-001"),
                     "max_tokens": 8192,
                 }
 
-                us_formatter_config = {
+                us_formatter_config: dict[str, object] = {
                     "models": [
                         GeminiProvider.model(
                             "gemini-2.5-flash-preview-04-17",
@@ -164,7 +164,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     response_format=MultipleRootCauseAnalysisOutputPrompt,
                     run_name="Root Cause Extraction & Formatting",
                     **(
-                        de_formatter_config if config.SENTRY_REGION == "de" else us_formatter_config
+                        de_formatter_config if config.SENTRY_REGION == "de" else us_formatter_config  # type: ignore[arg-type]
                     ),
                 )
 

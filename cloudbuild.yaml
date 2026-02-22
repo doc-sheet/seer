@@ -1,31 +1,34 @@
 steps:
+# Try to copy models from Sentry's bucket, fallback to placeholder if no access
 - name: 'gcr.io/cloud-builders/gsutil'
-  args: ['cp', '-r', 'gs://sentry-ml/seer/models/*', './models']
-
-- name: 'gcr.io/cloud-builders/docker'
-  args: [
-    'build',
-    '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:$COMMIT_SHA',
-    '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest',
-    '--build-arg',
-    'BUILDKIT_INLINE_CACHE=1',
-    '--build-arg',
-    'SEER_VERSION_SHA=$COMMIT_SHA',
-    '--cache-from', 'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest',
-    '.',
-  ]
-  env: [DOCKER_BUILDKIT=1]
-
-- name: 'gcr.io/cloud-builders/docker'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      # Only push "latest" tag when building on "main"
-      [ "$BRANCH_NAME" != "main" ] && exit 0
-      docker push us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:latest
+      gsutil cp -r gs://sentry-ml/seer/models/* ./models 2>/dev/null || {
+        echo "Models bucket not accessible, creating placeholder..."
+        mkdir -p models
+        echo "# Placeholder - models not available" > models/.keep
+      }
 
-# This is needed for Freight to find matching builds
-images: [
-  'us-central1-docker.pkg.dev/$PROJECT_ID/seer/image:$COMMIT_SHA',
-]
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/kencove-docker-repo/seer:$COMMIT_SHA',
+    '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/kencove-docker-repo/seer:$SHORT_SHA',
+    '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/kencove-docker-repo/seer:latest',
+    '--build-arg',
+    'BUILDKIT_INLINE_CACHE=1',
+    '--build-arg',
+    'SEER_VERSION_SHA=$COMMIT_SHA',
+    '--cache-from', 'us-central1-docker.pkg.dev/$PROJECT_ID/kencove-docker-repo/seer:latest',
+    '.',
+  ]
+  env: [DOCKER_BUILDKIT=1]
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/kencove-docker-repo/seer:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/kencove-docker-repo/seer:$SHORT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/kencove-docker-repo/seer:latest'
+
+timeout: '1800s'
